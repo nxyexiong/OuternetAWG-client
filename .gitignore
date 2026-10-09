@@ -1,0 +1,7 @@
+src/windows/**/bin/
+src/windows/**/obj/
+src/windows/dist/
+src/windows/.cache/
+*.user
+*.suo
+*.test.exe
