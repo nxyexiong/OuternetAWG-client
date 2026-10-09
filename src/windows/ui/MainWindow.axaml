@@ -5,98 +5,103 @@
         Title="OuternetAWG" Width="920" Height="680" MinWidth="760" MinHeight="580"
         SystemDecorations="Full" ExtendClientAreaToDecorationsHint="True"
         ExtendClientAreaChromeHints="NoChrome" ExtendClientAreaTitleBarHeightHint="0"
-        CanResize="True" Background="#F8F7FA" TransparencyLevelHint="None"
+        CanResize="True" Background="{DynamicResource WindowBackground}" TransparencyLevelHint="None"
         WindowStartupLocation="CenterScreen">
   <Panel>
-    <Border Name="WindowSurface" Background="#F8F7FA" CornerRadius="8" ClipToBounds="True">
+    <Border Name="WindowSurface" Background="{DynamicResource WindowBackground}" CornerRadius="8" ClipToBounds="True">
       <Grid ColumnDefinitions="204,*" RowDefinitions="52,*">
-        <Border Grid.RowSpan="2" Background="#EEECF2" BorderBrush="#E0DCE6" BorderThickness="0,0,1,0" />
+        <Border Grid.RowSpan="2" Background="{DynamicResource SidebarBackground}" BorderBrush="{DynamicResource SeparatorBrush}" BorderThickness="0,0,1,0" />
         <Border Grid.ColumnSpan="2" Background="Transparent" PointerPressed="TitlePressed">
           <Grid ColumnDefinitions="204,*" Margin="20,0">
             <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
-              <Button Name="CloseButton" Classes="traffic" Background="#FF5F57" BorderBrush="#E64740"
-                      Click="CloseClicked" ToolTip.Tip="Hide to tray" AutomationProperties.Name="Hide to tray" />
-              <Button Name="MinimizeButton" Classes="traffic" Background="#FEBC2E" BorderBrush="#DFA020"
-                      Click="MinimizeClicked" ToolTip.Tip="Minimize" AutomationProperties.Name="Minimize" />
-              <Button Name="MaximizeButton" Classes="traffic" Background="#28C840" BorderBrush="#20AA33"
-                      Click="MaximizeClicked" ToolTip.Tip="Maximize or restore" AutomationProperties.Name="Maximize" />
+              <Button Name="CloseButton" Classes="traffic" Background="{DynamicResource CloseFill}" BorderBrush="{DynamicResource CloseBorder}"
+                      Click="CloseClicked" ToolTip.Tip="{Binding Text[Window.Hide]}" AutomationProperties.Name="{Binding Text[Window.Hide]}" />
+              <Button Name="MinimizeButton" Classes="traffic" Background="{DynamicResource MinimizeFill}" BorderBrush="{DynamicResource MinimizeBorder}"
+                      Click="MinimizeClicked" ToolTip.Tip="{Binding Text[Window.Minimize]}" AutomationProperties.Name="{Binding Text[Window.Minimize]}" />
+              <Button Name="MaximizeButton" Classes="traffic" Background="{DynamicResource MaximizeFill}" BorderBrush="{DynamicResource MaximizeBorder}"
+                      Click="MaximizeClicked" ToolTip.Tip="{Binding Text[Window.Maximize]}" AutomationProperties.Name="{Binding Text[Window.Maximize]}" />
             </StackPanel>
-            <TextBlock Grid.Column="1" Text="OuternetAWG" FontSize="12" Foreground="#9992A2"
+            <TextBlock Grid.Column="1" Text="OuternetAWG" FontSize="12" Foreground="{DynamicResource CaptionText}"
                        HorizontalAlignment="Center" VerticalAlignment="Center" Margin="0,0,164,0" />
           </Grid>
         </Border>
         <Grid Grid.Row="1" RowDefinitions="Auto,Auto,*,Auto" Margin="16,18,16,22">
           <StackPanel Margin="10,0,0,34" Spacing="7">
-            <Border Width="38" Height="38" Background="#7455DA" CornerRadius="12" HorizontalAlignment="Left" Margin="0,0,0,5">
+            <Border Width="38" Height="38" Background="{DynamicResource AccentBrush}" CornerRadius="12" HorizontalAlignment="Left" Margin="0,0,0,5">
               <Path Data="M 8,19 A 11,11 0 1 1 30,19 A 11,11 0 1 1 8,19 M 8,19 L 30,19 M 19,8 C 11,13 11,25 19,30 M 19,8 C 27,13 27,25 19,30"
-                    Stroke="White" StrokeThickness="1.5" />
+                    Stroke="{DynamicResource AccentForeground}" StrokeThickness="1.5" />
             </Border>
             <TextBlock Text="Outernet" FontSize="22" FontWeight="SemiBold" LetterSpacing="-0.5" />
-            <TextBlock Text="AMNEZIAWG CLIENT" Classes="caption" FontSize="9" />
           </StackPanel>
           <StackPanel Grid.Row="1" Spacing="5">
-            <TextBlock Text="WORKSPACE" Classes="caption" Margin="12,0,0,8" FontSize="10" />
             <Button Classes="nav" Classes.selected="{Binding IsConnectionPage}" Click="ConnectionClicked">
               <StackPanel Orientation="Horizontal" Spacing="12">
-                <Path Data="M 2,8 L 2,14 M 7,4 L 7,18 M 12,0 L 12,22 M 17,4 L 17,18" Stroke="#7455DA" StrokeThickness="1.7" Width="19" Height="22" />
-                <TextBlock Text="Connection" VerticalAlignment="Center" />
+                <Path Data="M 2,8 L 2,14 M 7,4 L 7,18 M 12,0 L 12,22 M 17,4 L 17,18" Stroke="{DynamicResource AccentBrush}" StrokeThickness="1.7" Width="19" Height="22" />
+                <TextBlock Name="ConnectionNavLabel" Text="{Binding Text[Nav.Connection]}" VerticalAlignment="Center" />
               </StackPanel>
             </Button>
             <Button Classes="nav" Classes.selected="{Binding IsConfigurationPage}" Click="ConfigurationClicked">
               <StackPanel Orientation="Horizontal" Spacing="12">
                 <Path Data="M 2,1 L 12,1 L 17,6 L 17,21 L 2,21 Z M 11,1 L 11,7 L 17,7 M 6,12 L 13,12 M 6,16 L 13,16"
-                      Stroke="#847F91" StrokeThickness="1.5" Width="19" Height="22" />
-                <TextBlock Text="Configuration" VerticalAlignment="Center" />
+                      Stroke="{DynamicResource SecondaryText}" StrokeThickness="1.5" Width="19" Height="22" />
+                <TextBlock Text="{Binding Text[Nav.Configuration]}" VerticalAlignment="Center" />
+              </StackPanel>
+            </Button>
+            <Button Name="SettingsNavButton" Classes="nav" Classes.selected="{Binding IsSettingsPage}" Click="SettingsClicked">
+              <StackPanel Orientation="Horizontal" Spacing="12">
+                <Path Data="M 1,5 L 6,5 M 12,5 L 18,5 M 1,16 L 11,16 M 17,16 L 18,16 M 9,2 A 3,3 0 1 1 9,8 A 3,3 0 1 1 9,2 M 14,13 A 3,3 0 1 1 14,19 A 3,3 0 1 1 14,13"
+                      Stroke="{DynamicResource SecondaryText}" StrokeThickness="1.5" Width="19" Height="22" />
+                <TextBlock Text="{Binding Text[Nav.Settings]}" VerticalAlignment="Center" />
               </StackPanel>
             </Button>
           </StackPanel>
           <StackPanel Grid.Row="3" Spacing="8" Margin="10,0,0,0">
-            <StackPanel Orientation="Horizontal" Spacing="7">
-              <Ellipse Width="6" Height="6" Fill="#A6A0B2" VerticalAlignment="Center" />
-              <TextBlock Text="{Binding ServiceLabel}" FontSize="11" Classes="muted" />
-            </StackPanel>
-            <TextBlock Text="Private by design. Simple by choice." FontSize="9" Foreground="#A6A0B2" />
+            <Grid ColumnDefinitions="Auto,*">
+              <Ellipse Width="6" Height="6" Fill="{DynamicResource CaptionText}" VerticalAlignment="Center" Margin="0,0,7,0" />
+              <TextBlock Grid.Column="1" Text="{Binding ServiceLabel}" FontSize="11" Classes="muted" TextWrapping="Wrap" />
+            </Grid>
           </StackPanel>
         </Grid>
-        <Grid Name="ContentPanel" Grid.Row="1" Grid.Column="1" RowDefinitions="Auto,Auto,*,Auto"
+        <Grid Name="ContentPanel" Grid.Row="1" Grid.Column="1" RowDefinitions="Auto,Auto,*"
               Margin="28,12,28,20" MaxWidth="720">
           <StackPanel Spacing="6" Margin="0,0,0,16">
-            <TextBlock Text="Your connection" FontSize="28" FontWeight="SemiBold" LetterSpacing="-0.8" IsVisible="{Binding IsConnectionPage}" />
-            <TextBlock Text="Configuration" FontSize="28" FontWeight="SemiBold" LetterSpacing="-0.8" IsVisible="{Binding IsConfigurationPage}" />
-            <TextBlock Text="One config. One connection. No login." Classes="muted" FontSize="13" />
+            <TextBlock Text="{Binding Text[Connection.Title]}" FontSize="28" FontWeight="SemiBold" LetterSpacing="-0.8" IsVisible="{Binding IsConnectionPage}" />
+            <TextBlock Text="{Binding Text[Nav.Configuration]}" FontSize="28" FontWeight="SemiBold" LetterSpacing="-0.8" IsVisible="{Binding IsConfigurationPage}" />
+            <TextBlock Text="{Binding Text[Nav.Settings]}" FontSize="28" FontWeight="SemiBold" LetterSpacing="-0.8" IsVisible="{Binding IsSettingsPage}" />
           </StackPanel>
-          <Border Name="ErrorBanner" Grid.Row="1" Background="#FFF0EF" BorderBrush="#F1CFCA" BorderThickness="1"
-                  CornerRadius="10" Padding="12,10" Margin="0,0,0,12" IsVisible="{Binding HasError}">
-            <TextBlock Text="{Binding Error}" Foreground="#AE4940" TextWrapping="Wrap" FontSize="12"
-                       MaxLines="3" TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding Error}" />
-          </Border>
+          <StackPanel Grid.Row="1">
+            <Border Name="ErrorBanner" Classes="error" IsVisible="{Binding HasError}">
+              <TextBlock Text="{Binding Error}" ToolTip.Tip="{Binding Error}" />
+            </Border>
+            <Border Name="PreferencesErrorBanner" Classes="error" IsVisible="{Binding Preferences.HasError}">
+              <TextBlock Text="{Binding Preferences.Error}" ToolTip.Tip="{Binding Preferences.Error}" />
+            </Border>
+          </StackPanel>
           <Grid Name="ConnectionPage" Grid.Row="2" RowDefinitions="*,Auto" IsVisible="{Binding IsConnectionPage}">
             <Border Name="ConnectionCard" Classes="card" Padding="20,16">
-              <Grid RowDefinitions="*,Auto,Auto,Auto,Auto">
-                <Viewbox MaxWidth="88" MaxHeight="88" Stretch="Uniform" HorizontalAlignment="Center" VerticalAlignment="Bottom" Margin="0,0,0,12">
+              <Grid RowDefinitions="*,Auto,Auto,Auto" VerticalAlignment="Center">
+                <Viewbox Name="ConnectionIcon" MaxWidth="88" MaxHeight="88" Stretch="Uniform" HorizontalAlignment="Center" VerticalAlignment="Center" Margin="0,0,0,12">
                   <Grid Width="102" Height="102">
-                    <Ellipse Fill="#F3EFFC" />
-                    <Ellipse Margin="10" Stroke="#E3DBF8" StrokeThickness="1" />
-                    <Path Data="M 51,29 L 51,52 M 38,37 A 23,23 0 1 0 64,37" Stroke="#7455DA" StrokeThickness="3.5" StrokeLineCap="Round" />
+                    <Ellipse Fill="{DynamicResource IndicatorBackground}" />
+                    <Ellipse Margin="10" Stroke="{DynamicResource IndicatorRing}" StrokeThickness="1" />
+                    <Path Name="ConnectionPowerGlyph" Data="M 51,29 L 51,52 M 38,32.026334 A 23,23 0 1 0 64,32.026334" Stroke="{DynamicResource AccentBrush}" StrokeThickness="3.5" StrokeLineCap="Round" />
                   </Grid>
                 </Viewbox>
-                <TextBlock Grid.Row="1" Text="{Binding StateLabel}" FontSize="23" FontWeight="SemiBold" HorizontalAlignment="Center" />
-                <TextBlock Grid.Row="2" Text="{Binding Description}" Classes="muted" FontSize="12" TextWrapping="Wrap"
+                <TextBlock Name="ConnectionState" Grid.Row="1" Text="{Binding StateLabel}" FontSize="23" FontWeight="SemiBold" HorizontalAlignment="Center" />
+                <TextBlock Name="ConnectionDescription" Grid.Row="2" Text="{Binding Description}" ToolTip.Tip="{Binding Description}" Classes="muted" FontSize="12" TextWrapping="Wrap"
                            TextAlignment="Center" MaxWidth="370" MaxLines="3" TextTrimming="CharacterEllipsis" Margin="0,8,0,0" />
                 <Button Name="ConnectButton" Grid.Row="3" Classes="primary" Content="{Binding ButtonText}" IsEnabled="{Binding CanToggle}"
                         Click="ConnectClicked" Width="188" Height="40" HorizontalAlignment="Center" Margin="0,14,0,0" />
-                <TextBlock Grid.Row="4" Text="FULL-TUNNEL ROUTING" Classes="caption" FontSize="9"
-                           HorizontalAlignment="Center" Margin="0,12,0,0" />
               </Grid>
             </Border>
             <Border Name="ProfileCard" Grid.Row="1" Classes="card" Padding="18,14" Margin="0,14,0,0">
               <Grid ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto">
-                <TextBlock Text="CONFIGURATION" Classes="caption" FontSize="9" />
+                <TextBlock Text="{Binding Text[Nav.Configuration]}" Classes="caption" FontSize="9" />
                 <StackPanel Grid.Row="1" Spacing="4" Margin="0,7,12,0">
                   <TextBlock Text="{Binding ProfileName}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
                   <TextBlock Text="{Binding Endpoint}" Classes="muted" FontSize="11" TextTrimming="CharacterEllipsis" />
                 </StackPanel>
-                <Button Grid.Column="1" Grid.RowSpan="2" Content="Import..." Click="ImportClicked"
+                <Button Grid.Column="1" Grid.RowSpan="2" Content="{Binding Text[Configuration.Import]}" Click="ImportClicked"
                         IsEnabled="{Binding CanImport}" VerticalAlignment="Center" FontSize="12" />
               </Grid>
             </Border>
@@ -105,31 +110,52 @@
             <StackPanel Spacing="16">
               <Border Classes="card">
                 <StackPanel Spacing="10">
-                  <TextBlock Text="Current configuration" FontWeight="SemiBold" FontSize="16" />
+                  <TextBlock Text="{Binding Text[Configuration.Current]}" FontWeight="SemiBold" FontSize="16" />
                   <TextBlock Text="{Binding ProfileName}" TextWrapping="Wrap" />
                   <TextBlock Text="{Binding Endpoint}" Classes="muted" TextWrapping="Wrap" FontSize="12" />
                   <TextBlock Text="{Binding Address}" Classes="muted" TextWrapping="Wrap" FontSize="12" />
-                  <Button Content="Import a .conf or .vpn file" Click="ImportClicked" IsEnabled="{Binding CanImport}" HorizontalAlignment="Left" Margin="0,8,0,0" />
+                  <Button Content="{Binding Text[Configuration.ImportFile]}" Click="ImportClicked" IsEnabled="{Binding CanImport}" HorizontalAlignment="Left" Margin="0,8,0,0" />
                 </StackPanel>
               </Border>
               <Border Classes="card">
                 <StackPanel Spacing="12">
-                  <TextBlock Text="Or paste a configuration" FontSize="16" FontWeight="SemiBold" />
+                  <TextBlock Text="{Binding Text[Configuration.Paste]}" FontSize="16" FontWeight="SemiBold" />
                   <TextBox Name="ConfigInput" Text="{Binding PasteConfig}" AcceptsReturn="True" TextWrapping="Wrap"
                            Height="132" MaxLength="131072" FontFamily="Cascadia Mono, Consolas" FontSize="11"
-                           Watermark="[Interface] ... or vpn://..." IsEnabled="{Binding CanImport}" />
-                  <Button Classes="primary" Content="Use configuration" Click="UseConfigClicked" IsEnabled="{Binding CanImport}" HorizontalAlignment="Left" />
-                  <TextBlock Text="Stored encrypted by the Windows service. Disconnect before replacing your config."
-                             Classes="muted" FontSize="11" TextWrapping="Wrap" />
+                           Watermark="{Binding Text[Configuration.Placeholder]}" IsEnabled="{Binding CanImport}" />
+                  <Button Classes="primary" Content="{Binding Text[Configuration.Use]}" Click="UseConfigClicked" IsEnabled="{Binding CanImport}" HorizontalAlignment="Left" />
                 </StackPanel>
               </Border>
             </StackPanel>
           </ScrollViewer>
-          <TextBlock Name="TrayHint" Grid.Row="3" Text="Close hides to tray. Quit from the tray disconnects and stops the service."
-                     Classes="muted" FontSize="10" TextWrapping="Wrap" TextAlignment="Center" Margin="0,14,0,0" />
+          <Border Name="SettingsPage" Grid.Row="2" Classes="card" IsVisible="{Binding IsSettingsPage}" VerticalAlignment="Top">
+            <Grid ColumnDefinitions="*,220" RowDefinitions="Auto,Auto,Auto" RowSpacing="22" ColumnSpacing="16">
+              <TextBlock Grid.ColumnSpan="2" Text="{Binding Text[Settings.General]}" FontSize="16" FontWeight="SemiBold" />
+              <TextBlock Grid.Row="1" Text="{Binding Text[Settings.Theme]}" VerticalAlignment="Center" />
+              <ComboBox Name="ThemeSelector" Grid.Row="1" Grid.Column="1" HorizontalAlignment="Stretch"
+                        ItemsSource="{Binding Preferences.Themes}" SelectedItem="{Binding Preferences.SelectedTheme, Mode=TwoWay}"
+                        AutomationProperties.Name="{Binding Text[Settings.Theme]}">
+                <ComboBox.ItemTemplate>
+                  <DataTemplate x:DataType="vm:PreferenceChoice">
+                    <TextBlock Text="{Binding Label}" />
+                  </DataTemplate>
+                </ComboBox.ItemTemplate>
+              </ComboBox>
+              <TextBlock Grid.Row="2" Text="{Binding Text[Settings.Language]}" VerticalAlignment="Center" />
+              <ComboBox Name="LanguageSelector" Grid.Row="2" Grid.Column="1" HorizontalAlignment="Stretch"
+                        ItemsSource="{Binding Preferences.Languages}" SelectedItem="{Binding Preferences.SelectedLanguage, Mode=TwoWay}"
+                        AutomationProperties.Name="{Binding Text[Settings.Language]}">
+                <ComboBox.ItemTemplate>
+                  <DataTemplate x:DataType="vm:PreferenceChoice">
+                    <TextBlock Text="{Binding Label}" />
+                  </DataTemplate>
+                </ComboBox.ItemTemplate>
+              </ComboBox>
+            </Grid>
+          </Border>
         </Grid>
       </Grid>
     </Border>
-    <Border Name="WindowOutline" CornerRadius="8" BorderThickness="1" BorderBrush="#CFCAD8" IsHitTestVisible="False" />
+    <Border Name="WindowOutline" CornerRadius="8" BorderThickness="1" BorderBrush="{DynamicResource WindowBorder}" IsHitTestVisible="False" />
   </Panel>
 </Window>

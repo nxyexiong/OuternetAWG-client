@@ -18,15 +18,16 @@ public sealed partial class MainWindow : Window
     private Task? _polling;
     public MainViewModel Model => _model;
 
-    public MainWindow() : this(new ServiceClient()) { }
+    public MainWindow() : this(new ServiceClient(), new PreferencesViewModel(new PreferencesStore(),
+        theme => Application.Current!.RequestedThemeVariant = theme)) { }
 
-    public MainWindow(IServiceClient client)
+    public MainWindow(IServiceClient client, PreferencesViewModel? preferences = null)
     {
         InitializeComponent();
-        DataContext = _model = new MainViewModel(client);
+        DataContext = _model = new MainViewModel(client, preferences);
         Opened += (_, _) => _polling ??= PollAsync();
         Closing += OnClosing;
-        Closed += (_, _) => _lifetime.Cancel();
+        Closed += (_, _) => { _lifetime.Cancel(); _model.Dispose(); };
         AddHandler(PointerPressedEvent, ResizePressed, RoutingStrategies.Tunnel);
         UpdateWindowOutline();
     }
@@ -38,15 +39,20 @@ public sealed partial class MainWindow : Window
         {
             await _model.InitializeAsync(_lifetime.Token);
             while (await timer.WaitForNextTickAsync(_lifetime.Token))
+            {
+                _model.Text.RefreshSystemLanguage();
                 await _model.RefreshAsync(_lifetime.Token);
+            }
         }
         catch (OperationCanceledException) when (_lifetime.IsCancellationRequested) { }
     }
 
-    private void ConnectionClicked(object? sender, RoutedEventArgs e) => _model.Navigate(false);
-    private void ConfigurationClicked(object? sender, RoutedEventArgs e) => _model.Navigate(true);
+    private void ConnectionClicked(object? sender, RoutedEventArgs e) => _model.Navigate(ClientPage.Connection);
+    private void ConfigurationClicked(object? sender, RoutedEventArgs e) => _model.Navigate(ClientPage.Configuration);
+    private void SettingsClicked(object? sender, RoutedEventArgs e) => _model.Navigate(ClientPage.Settings);
     private async void ConnectClicked(object? sender, RoutedEventArgs e) => await _model.ToggleAsync();
-    private async void UseConfigClicked(object? sender, RoutedEventArgs e) => await _model.ImportAsync("Imported configuration", _model.PasteConfig);
+    private async void UseConfigClicked(object? sender, RoutedEventArgs e) =>
+        await _model.ImportAsync(_model.Text["Configuration.ImportedName"], _model.PasteConfig);
 
     private async void ImportClicked(object? sender, RoutedEventArgs e)
     {
@@ -54,9 +60,9 @@ public sealed partial class MainWindow : Window
         {
             var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
             {
-                Title = "Import OuternetAWG configuration",
+                Title = _model.Text["Configuration.PickerTitle"],
                 AllowMultiple = false,
-                FileTypeFilter = [new FilePickerFileType("AmneziaWG configuration") { Patterns = ["*.conf", "*.vpn"] }]
+                FileTypeFilter = [new FilePickerFileType(_model.Text["Configuration.FileType"]) { Patterns = ["*.conf", "*.vpn"] }]
             });
             if (files.Count == 0) return;
             using var file = files[0];
@@ -71,7 +77,7 @@ public sealed partial class MainWindow : Window
             }
             try
             {
-                if (size > 128 * 1024) throw new IOException("Config must be at most 128 KiB.");
+                if (size > 128 * 1024) throw new ClientException("Error.FileSize");
                 var content = new UTF8Encoding(false, true).GetString(bytes, 0, size);
                 await _model.ImportAsync(Path.GetFileNameWithoutExtension(file.Name), content);
             }
@@ -79,7 +85,7 @@ public sealed partial class MainWindow : Window
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or DecoderFallbackException)
         {
-            _model.ShowError("Could not import the file: " + ex.Message);
+            _model.ShowError(new ClientException("Error.Import", ex, ex));
         }
     }
 

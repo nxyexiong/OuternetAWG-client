@@ -2,7 +2,7 @@
 [CmdletBinding()]
 param(
     [ValidateSet('x64', 'arm64')][string]$Architecture = 'x64',
-    [ValidatePattern('^\d+\.\d+\.\d+(\.\d+)?$')][string]$Version = '0.1.3',
+    [ValidatePattern('^\d+\.\d+\.\d+(\.\d+)?$')][string]$Version = '1.0.0',
     [switch]$SkipBuild
 )
 

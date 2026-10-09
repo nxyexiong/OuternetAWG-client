@@ -4,14 +4,30 @@ using OuternetAWG.Services;
 
 namespace OuternetAWG.ViewModels;
 
-public sealed class MainViewModel(IServiceClient client) : INotifyPropertyChanged
+public enum ClientPage { Connection, Configuration, Settings }
+
+public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
 {
+    private readonly IServiceClient _client;
     private TunnelStatus? _status;
-    private bool _available, _busy, _configuration, _stopped;
+    private bool _available, _busy, _stopped;
+    private ClientPage _page;
     private bool _availabilityError, _shutdownFailed;
     private long _revision;
-    private string _error = "", _pastedConfig = "";
+    private Exception? _error;
+    private string _pastedConfig = "";
     public event PropertyChangedEventHandler? PropertyChanged;
+    public PreferencesViewModel Preferences { get; }
+    public LocalizationService Text => Preferences.Text;
+
+    public MainViewModel(IServiceClient client, PreferencesViewModel? preferences = null)
+    {
+        _client = client;
+        Preferences = preferences ?? new();
+        Text.PropertyChanged += LanguageChanged;
+    }
+
+    private void LanguageChanged(object? sender, PropertyChangedEventArgs e) => NotifyAll();
 
     public bool ServiceAvailable => _available;
     public bool Busy => _busy;
@@ -19,41 +35,52 @@ public sealed class MainViewModel(IServiceClient client) : INotifyPropertyChange
     public bool CanImport => _available && !_busy && !_shutdownFailed && !(_status?.Active ?? false);
     public bool CanToggle => _available && !_busy && !_shutdownFailed && _status?.Profile is not null;
     public bool IsConnected => _available && _status?.State == "connected";
-    public bool IsConnectionPage => !_configuration;
-    public bool IsConfigurationPage => _configuration;
-    public bool HasError => !string.IsNullOrEmpty(_error);
-    public string Error => _error;
-    public string ProfileName => _status?.Profile?.Name ?? "No configuration";
-    public string Endpoint => _status?.Profile?.Endpoint ?? "Import a config to choose your server";
-    public string Address => _status?.Profile?.Address ?? "Not configured";
-    public string ButtonText => _busy ? "Please wait..." : _status?.Active == true ? "Disconnect" : "Connect";
-    public string ServiceLabel => _available ? "Service ready" : "Service unavailable";
-    public string StateLabel => _shutdownFailed ? "Shutdown incomplete" : !_available ? "Not ready" : _status?.State switch
+    public bool IsConnectionPage => _page == ClientPage.Connection;
+    public bool IsConfigurationPage => _page == ClientPage.Configuration;
+    public bool IsSettingsPage => _page == ClientPage.Settings;
+    public bool HasError => _error is not null;
+    public string Error => _error is null ? "" : Text.Describe(_error);
+    public string ProfileName => _status?.Profile?.Name ?? Text["Connection.NoProfile"];
+    public string Endpoint => _status?.Profile?.Endpoint ?? Text["Connection.NoEndpoint"];
+    public string Address => _status?.Profile?.Address ?? Text["Connection.NoAddress"];
+    public string ButtonText => Text[_busy ? "Connection.Wait" : _status?.Active == true ? "Connection.Disconnect" : "Connection.Connect"];
+    public string ServiceLabel => Text[_available ? "Service.Ready" : "Service.Unavailable"];
+    public string StateLabel => Text[_shutdownFailed ? "State.ShutdownIncomplete" : !_available ? "State.NotReady" : _status?.State switch
     {
-        "connected" => "Connected",
-        "connecting" => "Connecting",
-        "waiting" => "Waiting for server",
-        "error" => "Connection error",
-        _ => "Disconnected"
-    };
+        "connected" => "State.Connected",
+        "connecting" => "State.Connecting",
+        "waiting" => "State.Waiting",
+        "error" => "State.Error",
+        _ => "State.Disconnected"
+    }];
     public string Description => _shutdownFailed
-        ? "Quit did not finish. Resolve the error above, then retry Quit."
+        ? Text["Description.ShutdownIncomplete"]
         : !_available
-        ? "Install the Windows service to connect. No account or login is needed."
-        : _status?.Message ?? "Import an OuternetAWG configuration to get started.";
+        ? Text["Description.Unavailable"]
+        : _status?.State == "error"
+        ? Text.Format("Error.ServiceDetails", _status.Message)
+        : Text[_status?.State switch
+        {
+            "connecting" => "Description.Connecting",
+            "waiting" => _status.Handshake is null ? "Description.Waiting" : "Description.Stale",
+            "connected" => "Description.Connected",
+            _ when _stopped => "Description.Stopped",
+            _ => _status?.Profile is null ? "Description.NoProfile" : "Description.Ready"
+        }];
     public string PasteConfig
     {
         get => _pastedConfig;
         set { _pastedConfig = value; Notify(); }
     }
 
-    public void Navigate(bool configuration) { _configuration = configuration; NotifyAll(); }
-    public void ShowError(string error) { _error = error; NotifyAll(); }
+    public void Navigate(ClientPage page) { _page = page; NotifyAll(); }
+    public void ShowError(string error) => ShowError(new IOException(error));
+    public void ShowError(Exception error) { _error = error; NotifyAll(); }
 
     public Task<bool> InitializeAsync(CancellationToken token = default) => RunAsync(async () =>
     {
-        await client.StartAsync(token);
-        return await client.SendAsync("status", cancellationToken: token);
+        await _client.StartAsync(token);
+        return await _client.SendAsync("status", cancellationToken: token);
     });
 
     public async Task RefreshAsync(CancellationToken token = default)
@@ -62,11 +89,11 @@ public sealed class MainViewModel(IServiceClient client) : INotifyPropertyChange
         var revision = _revision;
         try
         {
-            var status = await client.SendAsync("status", cancellationToken: token);
+            var status = await _client.SendAsync("status", cancellationToken: token);
             if (revision != _revision || _busy) return;
             _status = status;
             _available = true;
-            if (_availabilityError) _error = "";
+            if (_availabilityError) _error = null;
             _availabilityError = false;
         }
         catch (OperationCanceledException) when (token.IsCancellationRequested) { return; }
@@ -74,33 +101,33 @@ public sealed class MainViewModel(IServiceClient client) : INotifyPropertyChange
         {
             if (revision != _revision || _busy) return;
             _available = false;
-            _error = ex.Message;
+            _error = ex;
             _availabilityError = true;
         }
         NotifyAll();
     }
 
-    public Task ToggleAsync() => RunAsync(() => client.SendAsync(_status?.Active == true ? "disconnect" : "connect"));
+    public Task ToggleAsync() => RunAsync(() => _client.SendAsync(_status?.Active == true ? "disconnect" : "connect"));
 
     public async Task ImportAsync(string name, string config)
     {
         await RunAsync(async () =>
         {
-            var status = await client.SendAsync("import", name, config);
+            var status = await _client.SendAsync("import", name, config);
             PasteConfig = "";
-            _configuration = false;
+            _page = ClientPage.Connection;
             return status;
         });
     }
 
     public async Task<bool> StopForExitAsync()
     {
-        if (_busy) { ShowError("Wait for the current operation before quitting."); return false; }
+        if (_busy) { ShowError(new ClientException("Error.BusyQuit")); return false; }
         var success = await RunAsync(async () =>
         {
-            await client.StopAsync();
+            await _client.StopAsync();
             _stopped = true;
-            return new TunnelStatus("disconnected", false, "Disconnected. The service has stopped.", _status?.Profile, null);
+            return new TunnelStatus("disconnected", false, "", _status?.Profile, null);
         });
         _shutdownFailed = !success;
         NotifyAll();
@@ -112,7 +139,7 @@ public sealed class MainViewModel(IServiceClient client) : INotifyPropertyChange
         if (_busy) return false;
         _busy = true;
         _revision++;
-        _error = "";
+        _error = null;
         _availabilityError = false;
         _shutdownFailed = false;
         NotifyAll();
@@ -124,7 +151,7 @@ public sealed class MainViewModel(IServiceClient client) : INotifyPropertyChange
         }
         catch (Exception ex) when (IsExpected(ex))
         {
-            _error = ex.Message;
+            _error = ex;
             if (ex is not ServiceException)
             {
                 _available = false;
@@ -142,4 +169,9 @@ public sealed class MainViewModel(IServiceClient client) : INotifyPropertyChange
     private void Notify([CallerMemberName] string? property = null) =>
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(property));
     private void NotifyAll() => Notify(string.Empty);
+    public void Dispose()
+    {
+        Text.PropertyChanged -= LanguageChanged;
+        Preferences.Dispose();
+    }
 }

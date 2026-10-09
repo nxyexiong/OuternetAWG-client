@@ -3,10 +3,13 @@ using System.Text.Json;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Media.Imaging;
+using Avalonia.Media;
+using Avalonia.Styling;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using OuternetAWG;
 using OuternetAWG.Services;
+using OuternetAWG.ViewModels;
 
 internal static class NativeSmoke
 {
@@ -33,7 +36,8 @@ internal static class NativeSmoke
     private static async Task VerifyAsync()
     {
         var service = new FakeService();
-        var window = new MainWindow(service) { ShowActivated = false };
+        var preferences = TestApp.Preferences(theme => Application.Current!.RequestedThemeVariant = theme);
+        var window = new MainWindow(service, preferences) { ShowActivated = false };
         var exited = false;
         using var tray = new TrayController(window, () => exited = true);
         try
@@ -65,6 +69,23 @@ internal static class NativeSmoke
             await Task.Delay(150);
             VerifyLayout(window);
             SaveFrame(window, "native-connection-minimum.png");
+            foreach (var theme in new[] { "light", "dark" })
+            {
+                window.Model.Navigate(ClientPage.Settings);
+                window.FindControl<ComboBox>("ThemeSelector")!.SelectedItem = preferences.Themes.Single(x => x.Id == theme);
+                window.FindControl<ComboBox>("LanguageSelector")!.SelectedItem = preferences.Languages.Single(x => x.Id == "zh-Hans");
+                await Task.Delay(150);
+                Require(window.ActualThemeVariant == (theme == "light" ? ThemeVariant.Light : ThemeVariant.Dark), "Native theme did not switch.");
+                var color = ((ISolidColorBrush)window.FindControl<Border>("WindowSurface")!.Background!).Color;
+                Require(color == Color.Parse(theme == "light" ? "#F8F7FA" : "#1B1921"), "Native colors did not switch.");
+                Require(((NativeMenuItem)tray.Menu.Items[3]).Header == preferences.Text["Tray.Quit"], "Native tray was not translated.");
+                ClientTests.AssertContained(window.FindControl<Border>("SettingsPage")!, window.FindControl<Grid>("ContentPanel")!);
+                SaveFrame(window, $"native-settings-{theme}.png");
+            }
+            window.FindControl<ComboBox>("ThemeSelector")!.SelectedItem = preferences.Themes[0];
+            Require(Application.Current!.RequestedThemeVariant == ThemeVariant.Default, "System theme must remain OS-controlled.");
+            preferences.SelectedLanguage = preferences.Languages.Single(x => x.Id == "en");
+            window.Model.Navigate(ClientPage.Connection);
             window.WindowState = WindowState.Maximized;
             await Task.Delay(100);
             Require(!window.FindControl<Border>("WindowOutline")!.IsVisible, "Maximized windows must not retain a rounded inset border.");
@@ -82,7 +103,7 @@ internal static class NativeSmoke
             {
                 NativeFrame = true, DwmComposition = composition, DwmRoundedCorners = corners,
                 WindowScale = window.RenderScaling, FitsWithoutScroller = true,
-                CloseHides = true, QuitStopsService = true, RealServiceTouched = false
+                CloseHides = true, QuitStopsService = true, LiveThemeAndLanguage = true, RealServiceTouched = false
             }));
         }
         finally { window.CloseForShutdown(); }
@@ -92,7 +113,8 @@ internal static class NativeSmoke
     {
         window.UpdateLayout();
         var parent = window.FindControl<Grid>("ContentPanel")!;
-        foreach (var name in new[] { "ConnectButton", "ProfileCard", "TrayHint" })
+        ClientTests.AssertConnectionCentered(window);
+        foreach (var name in new[] { "ConnectButton", "ProfileCard" })
         {
             var control = window.FindControl<Control>(name)!;
             var end = control.TranslatePoint(new Point(control.Bounds.Width, control.Bounds.Height), parent)!.Value;

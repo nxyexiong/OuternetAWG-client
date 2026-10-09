@@ -1,34 +1,52 @@
 <Application xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             x:Class="OuternetAWG.App" RequestedThemeVariant="Light">
+             x:Class="OuternetAWG.App" RequestedThemeVariant="Default">
+  <Application.Resources>
+    <ResourceDictionary>
+      <ResourceDictionary.ThemeDictionaries>
+        <ResourceDictionary x:Key="Light">
+          <ResourceDictionary.MergedDictionaries>
+            <ResourceInclude Source="/Themes/Light.axaml" />
+          </ResourceDictionary.MergedDictionaries>
+        </ResourceDictionary>
+        <ResourceDictionary x:Key="Dark">
+          <ResourceDictionary.MergedDictionaries>
+            <ResourceInclude Source="/Themes/Dark.axaml" />
+          </ResourceDictionary.MergedDictionaries>
+        </ResourceDictionary>
+      </ResourceDictionary.ThemeDictionaries>
+    </ResourceDictionary>
+  </Application.Resources>
   <Application.Styles>
     <FluentTheme />
     <Style Selector="Window">
       <Setter Property="FontFamily" Value="Segoe UI Variable, Segoe UI" />
       <Setter Property="FontSize" Value="14" />
-      <Setter Property="Foreground" Value="#262433" />
+      <Setter Property="Foreground" Value="{DynamicResource PrimaryText}" />
     </Style>
     <Style Selector="Button">
       <Setter Property="CornerRadius" Value="9" />
       <Setter Property="Padding" Value="16,10" />
       <Setter Property="Cursor" Value="Hand" />
-      <Setter Property="Background" Value="#F3F1F7" />
-      <Setter Property="BorderBrush" Value="#E2DDEB" />
+      <Setter Property="Background" Value="{DynamicResource ControlBackground}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource ControlBorder}" />
+      <Setter Property="Foreground" Value="{DynamicResource PrimaryText}" />
       <Setter Property="BorderThickness" Value="1" />
     </Style>
     <Style Selector="Button.primary">
       <Setter Property="BorderThickness" Value="0" />
-      <Setter Property="Background" Value="#7455DA" />
-      <Setter Property="Foreground" Value="White" />
+      <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
+      <Setter Property="Foreground" Value="{DynamicResource AccentForeground}" />
       <Setter Property="FontWeight" Value="SemiBold" />
       <Setter Property="HorizontalContentAlignment" Value="Center" />
     </Style>
     <Style Selector="Button.primary:pointerover /template/ ContentPresenter">
-      <Setter Property="Background" Value="#6547C7" />
-      <Setter Property="Foreground" Value="White" />
+      <Setter Property="Background" Value="{DynamicResource AccentHoverBrush}" />
+      <Setter Property="Foreground" Value="{DynamicResource AccentForeground}" />
     </Style>
     <Style Selector="Button.primary:pressed /template/ ContentPresenter">
-      <Setter Property="Background" Value="#563BB7" />
+      <Setter Property="Background" Value="{DynamicResource AccentPressedBrush}" />
+      <Setter Property="Foreground" Value="{DynamicResource AccentForeground}" />
     </Style>
     <Style Selector="Button.nav">
       <Setter Property="BorderThickness" Value="0" />
@@ -36,28 +54,48 @@
       <Setter Property="HorizontalAlignment" Value="Stretch" />
       <Setter Property="HorizontalContentAlignment" Value="Left" />
       <Setter Property="Padding" Value="14,12" />
-      <Setter Property="Foreground" Value="#686374" />
+      <Setter Property="Foreground" Value="{DynamicResource SecondaryText}" />
     </Style>
     <Style Selector="Button.nav.selected">
-      <Setter Property="Background" Value="#E1DBF1" />
-      <Setter Property="Foreground" Value="#6244B7" />
+      <Setter Property="Background" Value="{DynamicResource SelectedBackground}" />
+      <Setter Property="Foreground" Value="{DynamicResource SelectedForeground}" />
       <Setter Property="FontWeight" Value="SemiBold" />
     </Style>
     <Style Selector="TextBlock.muted">
-      <Setter Property="Foreground" Value="#847F91" />
+      <Setter Property="Foreground" Value="{DynamicResource SecondaryText}" />
     </Style>
     <Style Selector="TextBlock.caption">
       <Setter Property="FontSize" Value="11" />
       <Setter Property="FontWeight" Value="SemiBold" />
-      <Setter Property="Foreground" Value="#96909F" />
+      <Setter Property="Foreground" Value="{DynamicResource CaptionText}" />
       <Setter Property="LetterSpacing" Value="1.4" />
     </Style>
     <Style Selector="Border.card">
-      <Setter Property="Background" Value="White" />
-      <Setter Property="BorderBrush" Value="#E9E6EE" />
+      <Setter Property="Background" Value="{DynamicResource CardBackground}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource CardBorder}" />
       <Setter Property="BorderThickness" Value="1" />
       <Setter Property="CornerRadius" Value="16" />
       <Setter Property="Padding" Value="24" />
+    </Style>
+    <Style Selector="ComboBox">
+      <Setter Property="CornerRadius" Value="8" />
+      <Setter Property="MinHeight" Value="40" />
+      <Setter Property="Padding" Value="12,8" />
+    </Style>
+    <Style Selector="Border.error">
+      <Setter Property="Background" Value="{DynamicResource ErrorBackground}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource ErrorBorder}" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="CornerRadius" Value="10" />
+      <Setter Property="Padding" Value="12,10" />
+      <Setter Property="Margin" Value="0,0,0,12" />
+    </Style>
+    <Style Selector="Border.error TextBlock">
+      <Setter Property="Foreground" Value="{DynamicResource ErrorForeground}" />
+      <Setter Property="FontSize" Value="12" />
+      <Setter Property="TextWrapping" Value="Wrap" />
+      <Setter Property="MaxLines" Value="3" />
+      <Setter Property="TextTrimming" Value="CharacterEllipsis" />
     </Style>
     <Style Selector="Button.traffic">
       <Setter Property="Width" Value="14" />

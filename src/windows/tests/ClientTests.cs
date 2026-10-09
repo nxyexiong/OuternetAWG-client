@@ -3,6 +3,7 @@ using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Headless.XUnit;
 using Avalonia.Platform;
+using Avalonia.Styling;
 using Avalonia.VisualTree;
 using OuternetAWG;
 using OuternetAWG.Services;
@@ -13,6 +14,9 @@ using Xunit;
 
 public static class TestApp
 {
+    public static PreferencesViewModel Preferences(Action<ThemeVariant>? applyTheme = null) =>
+        new(applyTheme: applyTheme, systemLanguage: () => "en-US");
+
     public static AppBuilder BuildAvaloniaApp() =>
         AppBuilder.Configure<App>().UseSkia()
             .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false });
@@ -112,7 +116,7 @@ public sealed class ClientTests
     public async Task QuitFailureIsNotReplacedByBackgroundPolling()
     {
         var service = new FakeService { StopError = new IOException("service cleanup failed") };
-        var vm = new MainViewModel(service);
+        using var vm = new MainViewModel(service, TestApp.Preferences());
         await vm.RefreshAsync();
         Assert.False(await vm.StopForExitAsync());
         var count = service.Commands.Count;
@@ -137,7 +141,7 @@ public sealed class ClientTests
     public async Task LatePollCannotOverwriteACompletedConnect()
     {
         var service = new FakeService();
-        var vm = new MainViewModel(service);
+        using var vm = new MainViewModel(service, TestApp.Preferences());
         await vm.RefreshAsync();
         var staleStatus = service.Status;
         var pending = new TaskCompletionSource<TunnelStatus>();
@@ -154,7 +158,7 @@ public sealed class ClientTests
     public async Task AvailabilityErrorClearsWhenServiceRecovers()
     {
         var service = new FakeService { Error = new IOException("service stopped") };
-        var vm = new MainViewModel(service);
+        using var vm = new MainViewModel(service, TestApp.Preferences());
         await vm.RefreshAsync();
         service.Error = null;
         await vm.RefreshAsync();
@@ -166,7 +170,7 @@ public sealed class ClientTests
     public async Task ImportConnectDisconnectHasNoLogin()
     {
         var service = new FakeService();
-        var vm = new MainViewModel(service);
+        using var vm = new MainViewModel(service, TestApp.Preferences());
         await vm.RefreshAsync();
         Assert.True(vm.CanImport);
         await vm.ImportAsync("Imported", "synthetic");
@@ -185,7 +189,7 @@ public sealed class ClientTests
     public async Task ServiceFailureIsNotShownAsDisconnected()
     {
         var service = new FakeService { Error = new IOException("service unavailable") };
-        var vm = new MainViewModel(service);
+        using var vm = new MainViewModel(service, TestApp.Preferences());
         await vm.RefreshAsync();
         Assert.False(vm.ServiceAvailable);
         Assert.False(vm.CanToggle);
@@ -198,7 +202,7 @@ public sealed class ClientTests
     public async Task ExitStopsTheServiceEvenIfLastPollWasIdle()
     {
         var service = new FakeService();
-        var vm = new MainViewModel(service);
+        using var vm = new MainViewModel(service, TestApp.Preferences());
         await vm.RefreshAsync();
         Assert.True(await vm.StopForExitAsync());
         Assert.Equal("service-stopped", service.Commands.Last());
@@ -211,7 +215,7 @@ public sealed class ClientTests
     public async Task RejectedImportKeepsThePreviousProfileAndInput()
     {
         var service = new FakeService();
-        var vm = new MainViewModel(service);
+        using var vm = new MainViewModel(service, TestApp.Preferences());
         await vm.RefreshAsync();
         service.Error = new ServiceException("invalid config");
         vm.PasteConfig = "keep this until corrected";
@@ -222,13 +226,15 @@ public sealed class ClientTests
     }
 
     [AvaloniaTheory]
+    [InlineData(1200, 900, false)]
     [InlineData(920, 680, false)]
+    [InlineData(920, 680, true)]
     [InlineData(760, 580, false)]
     [InlineData(760, 580, true)]
-    public void ConnectionFitsWithoutScrolling(double width, double height, bool showError)
+    public void ConnectionFitsAndCentersWithoutScrolling(double width, double height, bool showError)
     {
         var service = new FakeService();
-        var window = new MainWindow(service) { Width = width, Height = height };
+        var window = new MainWindow(service, TestApp.Preferences()) { Width = width, Height = height };
         window.Show();
         try
         {
@@ -243,11 +249,12 @@ public sealed class ClientTests
             Assert.Empty(page.GetVisualDescendants().OfType<ScrollViewer>());
             foreach (var name in new[] { "CloseButton", "MinimizeButton", "MaximizeButton" })
                 Assert.Null(window.FindControl<Button>(name)!.Content);
-            foreach (var name in new[] { "ConnectionCard", "ProfileCard", "TrayHint", "ConnectButton" })
+            foreach (var name in new[] { "ConnectionCard", "ProfileCard", "ConnectButton" })
                 AssertContained(window.FindControl<Control>(name)!, window.FindControl<Grid>("ContentPanel")!);
             var card = window.FindControl<Border>("ConnectionCard")!;
             foreach (var child in card.GetVisualDescendants().OfType<Control>().Where(x => x.IsEffectivelyVisible))
                 AssertContained(child, card);
+            AssertConnectionCentered(window);
             using var frame = window.CaptureRenderedFrame();
             Assert.NotNull(frame);
             frame!.Save(Path.Combine(AppContext.BaseDirectory, $"connection-{width}-{height}-{showError}.png"));
@@ -255,7 +262,30 @@ public sealed class ClientTests
         finally { window.CloseForShutdown(); }
     }
 
-    private static void AssertContained(Visual child, Visual parent)
+    internal static void AssertConnectionCentered(MainWindow window)
+    {
+        var card = window.FindControl<Border>("ConnectionCard")!;
+        var icon = window.FindControl<Viewbox>("ConnectionIcon")!;
+        var button = window.FindControl<Button>("ConnectButton")!;
+        var top = icon.TranslatePoint(default, card)!.Value.Y;
+        var bottom = button.TranslatePoint(new Point(0, button.Bounds.Height), card)!.Value.Y;
+        Assert.InRange(Math.Abs((top + bottom) / 2 - card.Bounds.Height / 2), 0, 1);
+        foreach (var name in new[] { "ConnectionIcon", "ConnectionState", "ConnectionDescription", "ConnectButton" })
+        {
+            var child = window.FindControl<Control>(name)!;
+            var center = child.TranslatePoint(new Point(child.Bounds.Width / 2, 0), card)!.Value.X;
+            Assert.InRange(Math.Abs(center - card.Bounds.Width / 2), 0, 1);
+        }
+        var iconContent = Assert.IsType<Grid>(icon.Child);
+        var glyph = window.FindControl<Avalonia.Controls.Shapes.Path>("ConnectionPowerGlyph")!;
+        var bounds = glyph.Data!.Bounds;
+        // The open circle includes its full diameter, so bottom minus radius gives its center.
+        var circleCenter = new Point(bounds.Center.X, bounds.Bottom - bounds.Width / 2);
+        Assert.InRange(Math.Abs(circleCenter.X - iconContent.Bounds.Width / 2), 0, 0.05);
+        Assert.InRange(Math.Abs(circleCenter.Y - iconContent.Bounds.Height / 2), 0, 0.05);
+    }
+
+    internal static void AssertContained(Visual child, Visual parent)
     {
         var first = child.TranslatePoint(default, parent)!.Value;
         var last = child.TranslatePoint(new Point(child.Bounds.Width, child.Bounds.Height), parent)!.Value;
@@ -267,7 +297,7 @@ public sealed class ClientTests
     public void CloseHidesAndOpenRestoresWithoutRestartingService()
     {
         var service = new FakeService();
-        var window = new MainWindow(service);
+        var window = new MainWindow(service, TestApp.Preferences());
         window.Show();
         try
         {
@@ -287,7 +317,7 @@ public sealed class ClientTests
         var stopped = new TaskCompletionSource();
         var service = new FakeService { PendingStop = stopped.Task };
         service.Status = service.Status with { Active = true, State = "connected" };
-        var window = new MainWindow(service);
+        var window = new MainWindow(service, TestApp.Preferences());
         using var tray = new TrayController(window, () => service.Commands.Add("ui-exit"));
         window.Show();
         window.Close();
@@ -310,7 +340,7 @@ public sealed class ClientTests
     public async Task FailedServiceStopKeepsTheUIAndRestoresTheWindow()
     {
         var service = new FakeService { StopError = new IOException("Stop permission denied") };
-        var window = new MainWindow(service);
+        var window = new MainWindow(service, TestApp.Preferences());
         var exited = false;
         using var tray = new TrayController(window, () => exited = true);
         window.Show();

@@ -32,7 +32,7 @@ public sealed class ServiceClient : IServiceClient
 
     public async Task StopAsync(CancellationToken cancellationToken = default)
     {
-        if (!OperatingSystem.IsWindows()) throw new PlatformNotSupportedException("OuternetAWG requires Windows.");
+        if (!OperatingSystem.IsWindows()) throw new ClientException("Error.Windows");
         await DisconnectAndStopAsync(
             () => ReadServiceStatus()?.CurrentState == 4,
             () => SendAsync("disconnect", cancellationToken: cancellationToken),
@@ -54,8 +54,8 @@ public sealed class ServiceClient : IServiceClient
                 try { await stop(); }
                 catch (Exception stopError) when (stopError is IOException or Win32Exception or UnauthorizedAccessException)
                 {
-                    throw new IOException("Disconnect could not be confirmed and the service could not stop: " + stopError.Message,
-                        new AggregateException(disconnectError, stopError));
+                    throw new ClientException("Error.DisconnectStop",
+                        new AggregateException(disconnectError, stopError), stopError);
                 }
                 return;
             }
@@ -80,7 +80,7 @@ public sealed class ServiceClient : IServiceClient
     private static Task ChangeServiceStateAsync(bool start, CancellationToken cancellationToken) =>
         Task.Run(async () =>
         {
-            if (!OperatingSystem.IsWindows()) throw new PlatformNotSupportedException("OuternetAWG requires Windows.");
+            if (!OperatingSystem.IsWindows()) throw new ClientException("Error.Windows");
             using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
             timeout.CancelAfter(TimeSpan.FromSeconds(start ? 40 : 75));
             using var manager = Native.OpenSCManager(null, null, 1);
@@ -103,12 +103,12 @@ public sealed class ServiceClient : IServiceClient
                     if (!start && status.CurrentState == 1)
                     {
                         if (requested && (status.Win32ExitCode != 0 || status.ServiceSpecificExitCode != 0))
-                            throw new IOException($"The service stopped with a cleanup error ({status.Win32ExitCode}/{status.ServiceSpecificExitCode}). Check the service log.");
+                            throw new ClientException("Error.Cleanup", null, status.Win32ExitCode, status.ServiceSpecificExitCode);
                         return;
                     }
                     if (start && status.CurrentState == 1)
                     {
-                        if (requested) throw new IOException("The service exited during startup. Check the service log or repair the installation.");
+                        if (requested) throw new ClientException("Error.StartExited");
                         if (!Native.StartService(service, 0, IntPtr.Zero))
                         {
                             var error = Marshal.GetLastWin32Error();
@@ -127,23 +127,21 @@ public sealed class ServiceClient : IServiceClient
                         else requested = true;
                     }
                     else if (status.CurrentState is not (1 or 2 or 3 or 4))
-                        throw new IOException("The OuternetAWG service is in an unsupported state. Restart it from Windows Services.");
+                        throw new ClientException("Error.ServiceState");
                     await Task.Delay(200, timeout.Token);
                 }
             }
             catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
             {
-                throw new IOException(start
-                    ? "The service did not start in time. Check the service log."
-                    : "The service has not finished disconnecting and stopping. The UI will remain open; retry Quit after it finishes.");
+                throw new ClientException(start ? "Error.StartTimeout" : "Error.StopTimeout");
             }
         }, cancellationToken);
 
     private static Exception ServiceAccessError(int error) => error switch
     {
-        1060 => new IOException("The OuternetAWG service is not installed. Run the installer first."),
-        5 => new IOException("Service control permission was denied. Reinstall OuternetAWG for this Windows user to enable on-demand start and stop."),
-        1058 => new IOException("The OuternetAWG service is disabled. Set it to Manual in Windows Services or repair the installation."),
+        1060 => new ClientException("Error.NotInstalled"),
+        5 => new ClientException("Error.ServicePermission"),
+        1058 => new ClientException("Error.ServiceDisabled"),
         _ => new Win32Exception(error)
     };
 
@@ -157,7 +155,7 @@ public sealed class ServiceClient : IServiceClient
     public async Task<TunnelStatus> SendAsync(string command, string? name = null, string? config = null,
         CancellationToken cancellationToken = default)
     {
-        if (!OperatingSystem.IsWindows()) throw new PlatformNotSupportedException("OuternetAWG requires Windows.");
+        if (!OperatingSystem.IsWindows()) throw new ClientException("Error.Windows");
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         timeout.CancelAfter(command == "status" ? TimeSpan.FromSeconds(3) : TimeSpan.FromSeconds(40));
         await using var pipe = new NamedPipeClientStream(".", "OuternetAWG.Control.v1",
@@ -167,7 +165,7 @@ public sealed class ServiceClient : IServiceClient
             await pipe.ConnectAsync(timeout.Token);
             VerifyService(pipe.SafePipeHandle);
             var payload = JsonSerializer.SerializeToUtf8Bytes(new ServiceRequest(1, command, name, config), Json);
-            if (payload.Length > MaxFrame) throw new IOException("Config is too large.");
+            if (payload.Length > MaxFrame) throw new ClientException("Error.ConfigSize");
             try
             {
                 var prefix = new byte[4];
@@ -177,36 +175,39 @@ public sealed class ServiceClient : IServiceClient
                 await pipe.FlushAsync(timeout.Token);
                 await pipe.ReadExactlyAsync(prefix, timeout.Token);
                 var length = BinaryPrimitives.ReadInt32LittleEndian(prefix);
-                if (length is <= 0 or > MaxFrame) throw new IOException("Invalid response from the service.");
+                if (length is <= 0 or > MaxFrame) throw new ClientException("Error.InvalidResponse");
                 var body = new byte[length];
                 await pipe.ReadExactlyAsync(body, timeout.Token);
                 var response = JsonSerializer.Deserialize<ServiceResponse>(body, Json)
-                    ?? throw new IOException("Empty response from the service.");
+                    ?? throw new ClientException("Error.EmptyResponse");
                 if (response.Version != 1 || response.Status is null)
-                    throw new IOException("UI and service versions do not match. Reinstall them together.");
-                if (!response.Ok) throw new ServiceException(response.Error ?? "The service rejected the request.");
+                    throw new ClientException("Error.Version");
+                if (!response.Ok) throw new ServiceException(response.Error);
                 return response.Status;
             }
             finally { Array.Clear(payload); }
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
         {
-            throw new IOException("The service did not respond. Install or restart the OuternetAWG service.");
+            throw new ClientException("Error.ResponseTimeout");
         }
     }
 
     private static void VerifyService(SafePipeHandle pipe)
     {
         if (!Native.GetNamedPipeServerProcessId(pipe, out var serverPid))
-            throw new Win32Exception(Marshal.GetLastWin32Error(), "Cannot verify the control pipe.");
+        {
+            var error = new Win32Exception(Marshal.GetLastWin32Error());
+            throw new ClientException("Error.VerifyPipe", error, error);
+        }
         using var manager = Native.OpenSCManager(null, null, 1);
         if (manager.IsInvalid) throw new Win32Exception(Marshal.GetLastWin32Error());
         using var service = Native.OpenService(manager, "OuternetAWG", 4);
-        if (service.IsInvalid) throw new IOException("The OuternetAWG service is not installed.");
+        if (service.IsInvalid) throw new ClientException("Error.NotInstalled");
         var status = QueryStatus(service);
         // SCM is the trusted authority. Never send a private key to a pipe-name impostor.
         if (status.ProcessId == 0 || status.ProcessId != serverPid || status.CurrentState != 4)
-            throw new IOException("The control pipe does not belong to the running OuternetAWG service.");
+            throw new ClientException("Error.PipeOwner");
     }
 
     private static class Native
@@ -254,4 +255,7 @@ public sealed class ServiceClient : IServiceClient
     }
 }
 
-public sealed class ServiceException(string message) : Exception(message);
+public sealed class ServiceException(string? message) : Exception(message)
+{
+    public bool HasDetails { get; } = !string.IsNullOrWhiteSpace(message);
+}

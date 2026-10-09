@@ -2,10 +2,11 @@
 
 A single-config AmneziaWG client. No login, accounts, server discovery, telemetry,
 updater, or profile collection. The frameless Avalonia window has symbol-free macOS-style
-traffic-light controls, a left navigation panel and a right connection/configuration view.
+traffic-light controls, a left navigation panel and connection, configuration and settings views.
 It retains the native Windows frame for DWM shadows and Windows 11 rounded corners;
 the custom title bar replaces the standard Windows buttons. The connection page fits
 without scrolling, including at the minimum window size.
+Its icon, status, description and connect button stay centered as one group within the connection card.
 
 ## Build
 
@@ -35,12 +36,12 @@ The application's own binaries and scripts are not Authenticode-signed.
 
 ```powershell
 Set-Location C:\UserData\workspace\OuternetAWG-client\src\windows
-.\package.ps1 -Architecture x64 -Version 0.1.3
-.\package.ps1 -Architecture arm64 -Version 0.1.3
+.\package.ps1 -Architecture x64 -Version 1.0.0
+.\package.ps1 -Architecture arm64 -Version 1.0.0
 ```
 
 Each command builds the client and produces a single, complete offline installer:
-`dist\installers\OuternetAWG-0.1.3-windows-x64-setup.exe` (or `arm64`),
+`dist\installers\OuternetAWG-1.0.0-windows-x64-setup.exe` (or `arm64`),
 with a `.sha256` checksum and compiler log alongside it. Use `-SkipBuild` to
 repackage an existing, verified release; stale service-install scripts are rejected.
 The target computer needs neither Go, a .NET SDK/runtime installation, PowerShell 7,
@@ -118,12 +119,38 @@ the Quit action and can leave the independently running service active.
 
 The installer authorizes the Windows SID running it. If elevation uses a *different*
 administrator account, obtain your normal user's SID with `whoami /user` first and
-pass it to `.\OuternetAWG-0.1.3-windows-x64-setup.exe /USERSID=S-1-5-21-...`
+pass it to `.\OuternetAWG-1.0.0-windows-x64-setup.exe /USERSID=S-1-5-21-...`
 (or `.\install.ps1 -UserSid 'S-1-5-21-...'` for the raw release).
 Start the installer normally, rather than from an already elevated terminal, if
 you want its optional launch-at-finish action to run without elevation.
 No application login is involved.
 One user SID and one machine-wide tunnel are supported.
+
+## Language and appearance
+
+**Settings > General** provides Theme and Language. Both default to **System default**.
+Theme supports Light and Dark; the system option follows Windows appearance changes.
+Language supports English, French, German, Russian, Simplified Chinese, Traditional
+Chinese, Japanese and Korean, with each language listed in its own writing system.
+The system option follows the current Windows display language; unsupported languages
+fall back to English. Chinese regional preferences select the appropriate script.
+
+Selections apply immediately to the open window, status labels, tooltips and tray menu,
+without restarting either process or reconnecting the tunnel. Application-generated
+errors also retranslate; raw service/Windows diagnostics and user-supplied profile
+names remain unchanged so troubleshooting details are preserved. Native file-dialog
+buttons are supplied by Windows and use its display language.
+
+Preferences are saved atomically in `%LocalAppData%\OuternetAWG\settings.json`, separately
+from the service's encrypted VPN profile. This file contains only `theme` and `language`;
+it does not require administrator access. Read/write failures appear in the UI rather
+than silently losing preferences. Upgrades and uninstall leave these per-user settings
+in place. An unreadable/invalid file is not overwritten until a setting is changed.
+
+Translations live in `ui\Locales\*.json` and are embedded in the app. Every catalog must
+have the same keys and format placeholders as `en.json`. Theme brushes live in dedicated
+`ui\Themes\Light.axaml` and `Dark.axaml` dictionaries, referenced with dynamic resources;
+Fluent controls follow the same active theme variant.
 
 ## Routing and privacy
 
@@ -205,7 +232,7 @@ dotnet test .\tests\OuternetAWG.UI.Tests.csproj
 dotnet run --project .\tests\OuternetAWG.UI.Tests.csproj -- --native-smoke
 # After packaging, inspect the actual EXE resources without running either executable:
 .\tools\test-icons.ps1 -ApplicationExe .\dist\win-x64\ui\OuternetAWG.exe `
-    -InstallerExe .\dist\installers\OuternetAWG-0.1.3-windows-x64-setup.exe
+    -InstallerExe .\dist\installers\OuternetAWG-1.0.0-windows-x64-setup.exe
 ```
 
 Headless UI tests render the connection page at normal/minimum sizes, including
@@ -213,6 +240,9 @@ an error banner, to the ignored test output directory. They assert that controls
 fit their actual bounds, Close only hides, Open reuses the window, and Quit waits
 for disconnect and service shutdown without masking errors. Teardown regressions
 cover adapter/endpoint/firewall ordering and repeated closes.
+Preference tests cover catalog completeness, regional/system language resolution,
+live window/tray/error translation, both theme palettes, minimum-size localized layouts,
+atomic persistence, restart restoration and visible storage failures.
 The native smoke harness checks the real Win32/DWM frame,
 rounded-corner preference, layout, tray and lifecycle without contacting the real service.
 Tests also cover portal profile decoding, both split-default
