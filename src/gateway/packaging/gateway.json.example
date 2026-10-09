@@ -1,0 +1,7 @@
+{
+  "ingress_interface": "eth0",
+  "tunnel_interface": "oawg0",
+  "protected_sources": [
+    "192.168.10.3/32"
+  ]
+}

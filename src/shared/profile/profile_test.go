@@ -44,7 +44,7 @@ func TestManagementConfigAndSplitDefaults(t *testing.T) {
 		t.Fatal("management key mapping or endpoint pinning failed")
 	}
 	if strings.Contains(uapi, "allowed_ip=::/0") {
-		t.Fatal("IPv4-only node must not forward IPv6; WFP blocks its fallback")
+		t.Fatal("IPv4-only profiles must not forward IPv6")
 	}
 	metadata, _ := json.Marshal(p.Summary())
 	if strings.Contains(string(metadata), "PrivateKey") || strings.Contains(string(metadata), strings.Repeat("01", 32)) {

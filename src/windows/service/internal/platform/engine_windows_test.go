@@ -11,8 +11,8 @@ import (
 	"github.com/amnezia-vpn/amneziawg-go/v3/conn"
 	"github.com/amnezia-vpn/amneziawg-go/v3/device"
 	"github.com/amnezia-vpn/amneziawg-go/v3/tun"
+	"github.com/nxyexiong/OuternetAWG-client/shared/profile"
 	"github.com/nxyexiong/OuternetAWG-client/windows/service/internal/control"
-	"github.com/nxyexiong/OuternetAWG-client/windows/service/internal/profile"
 )
 
 type memoryTun struct {

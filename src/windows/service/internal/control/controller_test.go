@@ -11,7 +11,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/nxyexiong/OuternetAWG-client/windows/service/internal/profile"
+	"github.com/nxyexiong/OuternetAWG-client/shared/profile"
 )
 
 type memoryStore struct {

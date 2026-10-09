@@ -1,0 +1,39 @@
+[Unit]
+Description=OuternetAWG Linux gateway
+Requires=outernetawg-gateway-guard.service
+Wants=network-online.target
+After=outernetawg-gateway-guard.service network-online.target
+StartLimitIntervalSec=300
+StartLimitBurst=10
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/outernetawg-gateway run
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=75
+KillMode=control-group
+User=root
+Group=root
+UMask=0077
+StateDirectory=outernetawg-gateway
+StateDirectoryMode=0700
+RuntimeDirectory=outernetawg-gateway
+RuntimeDirectoryMode=0700
+RuntimeDirectoryPreserve=yes
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+NoNewPrivileges=true
+ProtectControlGroups=true
+ProtectKernelModules=true
+RestrictSUIDSGID=true
+LockPersonality=true
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX AF_NETLINK
+CapabilityBoundingSet=CAP_NET_ADMIN CAP_NET_BIND_SERVICE
+DevicePolicy=closed
+DeviceAllow=/dev/net/tun rw
+ReadWritePaths=/var/lib/outernetawg-gateway /run/outernetawg-gateway
+
+[Install]
+WantedBy=multi-user.target

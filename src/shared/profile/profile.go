@@ -49,8 +49,11 @@ func (p *Profile) Summary() Summary {
 	for i, address := range p.Addresses {
 		a[i] = address.String()
 	}
+
 	return Summary{p.Name, net.JoinHostPort(p.Host, strconv.Itoa(int(p.Port))), strings.Join(a, ", ")}
 }
+
+func (p *Profile) PersistentKeepalive() int { return p.keepalive }
 
 var awgFields = map[string]string{
 	"jc": "jc", "jmin": "jmin", "jmax": "jmax",

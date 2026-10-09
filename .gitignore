@@ -2,6 +2,9 @@ src/windows/**/bin/
 src/windows/**/obj/
 src/windows/dist/
 src/windows/.cache/
+src/gateway/dist/
+*.conf
+*.vpn
 *.user
 *.suo
 *.test.exe

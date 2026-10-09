@@ -1,0 +1,34 @@
+[Unit]
+Description=OuternetAWG persistent gateway forwarding protection
+DefaultDependencies=no
+After=local-fs.target systemd-sysctl.service
+Before=network-pre.target
+Wants=network-pre.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/outernetawg-gateway protect
+RemainAfterExit=yes
+TimeoutStartSec=30
+User=root
+Group=root
+UMask=0077
+StateDirectory=outernetawg-gateway
+StateDirectoryMode=0700
+RuntimeDirectory=outernetawg-gateway
+RuntimeDirectoryMode=0700
+RuntimeDirectoryPreserve=yes
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+NoNewPrivileges=true
+ProtectControlGroups=true
+ProtectKernelModules=true
+RestrictSUIDSGID=true
+LockPersonality=true
+CapabilityBoundingSet=CAP_NET_ADMIN
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX AF_NETLINK
+ReadWritePaths=/var/lib/outernetawg-gateway /run/outernetawg-gateway
+
+[Install]
+WantedBy=multi-user.target

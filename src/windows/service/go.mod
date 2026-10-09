@@ -5,9 +5,12 @@ go 1.26.0
 require (
 	github.com/Microsoft/go-winio v0.6.2
 	github.com/amnezia-vpn/amneziawg-go/v3 v3.1.20260828
+	github.com/nxyexiong/OuternetAWG-client/shared v0.0.0
 	golang.org/x/sys v0.43.0
 	golang.zx2c4.com/wireguard/windows v1.0.1
 )
+
+replace github.com/nxyexiong/OuternetAWG-client/shared => ../../shared
 
 require (
 	golang.org/x/crypto v0.50.0 // indirect

@@ -7,7 +7,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/nxyexiong/OuternetAWG-client/windows/service/internal/profile"
+	"github.com/nxyexiong/OuternetAWG-client/shared/profile"
 )
 
 type SavedProfile struct {

@@ -1,0 +1,10 @@
+**
+!LICENSE
+!src/
+!src/shared/
+!src/shared/**
+!src/gateway/
+!src/gateway/**
+src/gateway/dist
+**/*.conf
+**/*.vpn
