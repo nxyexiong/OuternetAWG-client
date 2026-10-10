@@ -1,0 +1,54 @@
+--- a/vendor/github.com/amnezia-vpn/amneziawg-go/v3/device/timers.go
++++ b/vendor/github.com/amnezia-vpn/amneziawg-go/v3/device/timers.go
+@@ -37,8 +37,8 @@
+ 			return
+ 		}
+ 		duration := timer.duration
+-		timer.modifyingLock.Unlock()
+ 		timer.duration = 0
++		timer.modifyingLock.Unlock()
+ 
+ 		expirationFunction(peer, duration)
+ 	})
+--- /dev/null
++++ b/vendor/github.com/amnezia-vpn/amneziawg-go/v3/device/outernet_timer_test.go
+@@ -0,0 +1,39 @@
++package device
++
++import (
++	"runtime"
++	"sync"
++	"testing"
++	"time"
++)
++
++func TestOuternetTimerExpiryAndReset(t *testing.T) {
++	peer := &Peer{}
++	timer := peer.NewTimer(func(_ *Peer, duration time.Duration) {
++		if duration <= 0 {
++			t.Error("expired timer lost its duration")
++		}
++	})
++	defer timer.DelSync()
++	var workers sync.WaitGroup
++	for range 4 {
++		workers.Go(func() {
++			for range 2000 {
++				timer.Mod(time.Nanosecond)
++				runtime.Gosched()
++				timer.IsPending()
++				timer.Del()
++			}
++		})
++	}
++	workers.Wait()
++	timer.DelSync()
++	if timer.IsPending() {
++		t.Fatal("timer still pending after synchronous deletion")
++	}
++	timer.Mod(time.Hour)
++	if !timer.IsPending() {
++		t.Fatal("timer reset was lost")
++	}
++	timer.DelSync()
++}

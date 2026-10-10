@@ -3,6 +3,9 @@ src/windows/**/obj/
 src/windows/dist/
 src/windows/.cache/
 src/gateway/dist/
+src/nas/artifacts/
+src/nas/secrets/
+src/nas/.env
 *.conf
 *.vpn
 *.user

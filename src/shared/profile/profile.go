@@ -385,8 +385,32 @@ func unpackGuest(content string) (string, error) {
 }
 
 func (p *Profile) UAPI(endpoint netip.Addr) string {
+	allowed := []netip.Prefix{netip.MustParsePrefix("0.0.0.0/0")}
+	if p.ipv6 {
+		allowed = append(allowed, netip.MustParsePrefix("::/0"))
+	}
+	return p.uapi(endpoint, allowed, p.listenPort)
+}
+
+// SubnetUAPI restricts an endpoint edition without changing the imported profile
+// or the full-tunnel behavior of the Windows and gateway editions.
+func (p *Profile) SubnetUAPI(endpoint netip.Addr, subnet netip.Prefix) (string, error) {
+	if !subnet.IsValid() || !subnet.Addr().Is4() || subnet != subnet.Masked() ||
+		subnet.Bits() < 8 || subnet.Bits() > 30 || !subnet.Addr().IsGlobalUnicast() ||
+		len(p.Addresses) != 1 || !p.Addresses[0].Addr().Is4() || p.Addresses[0].Bits() != 32 ||
+		!subnet.Contains(p.Addresses[0].Addr()) {
+		return "", errors.New("subnet routing requires a canonical IPv4 /8 through /30 containing the single VPN /32")
+	}
+	if !endpoint.Is4() || !endpoint.IsGlobalUnicast() || subnet.Contains(endpoint) {
+		return "", errors.New("the IPv4 server endpoint must be outside the VPN subnet")
+	}
+	// A NAS shares the host network; do not reserve a profile's fixed listen port.
+	return p.uapi(endpoint, []netip.Prefix{subnet}, 0), nil
+}
+
+func (p *Profile) uapi(endpoint netip.Addr, allowed []netip.Prefix, listenPort int) string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "private_key=%s\nlisten_port=%d\nreplace_peers=true\n", p.privateKey, p.listenPort)
+	fmt.Fprintf(&b, "private_key=%s\nlisten_port=%d\nreplace_peers=true\n", p.privateKey, listenPort)
 	keys := make([]string, 0, len(p.awg))
 	for k := range p.awg {
 		keys = append(keys, k)
@@ -399,10 +423,10 @@ func (p *Profile) UAPI(endpoint netip.Addr) string {
 	if p.preshared != "" {
 		fmt.Fprintf(&b, "preshared_key=%s\n", p.preshared)
 	}
-	fmt.Fprintf(&b, "endpoint=%s\npersistent_keepalive_interval=%d\nreplace_allowed_ips=true\nallowed_ip=0.0.0.0/0\n",
+	fmt.Fprintf(&b, "endpoint=%s\npersistent_keepalive_interval=%d\nreplace_allowed_ips=true\n",
 		netip.AddrPortFrom(endpoint, p.Port), p.keepalive)
-	if p.ipv6 {
-		b.WriteString("allowed_ip=::/0\n")
+	for _, prefix := range allowed {
+		fmt.Fprintf(&b, "allowed_ip=%s\n", prefix)
 	}
 	return b.String()
 }

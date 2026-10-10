@@ -9,15 +9,11 @@ import (
 	"sync"
 	"time"
 
+	"github.com/nxyexiong/OuternetAWG-client/shared/awg"
 	"github.com/nxyexiong/OuternetAWG-client/shared/profile"
 )
 
-type Traffic struct {
-	Handshake time.Time `json:"last_handshake,omitempty"`
-	Upload    uint64    `json:"session_upload_bytes"`
-	Download  uint64    `json:"session_download_bytes"`
-	Endpoint  string    `json:"endpoint,omitempty"`
-}
+type Traffic = awg.Traffic
 
 type Session interface {
 	Stats() (Traffic, error)

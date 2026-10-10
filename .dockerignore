@@ -5,6 +5,11 @@
 !src/shared/**
 !src/gateway/
 !src/gateway/**
+!src/nas/
+!src/nas/**
 src/gateway/dist
+src/nas/artifacts
+src/nas/secrets
+**/.env
 **/*.conf
 **/*.vpn

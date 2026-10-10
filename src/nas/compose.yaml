@@ -1,0 +1,35 @@
+services:
+  outernetawg-nas:
+    image: outernetawg-nas:latest
+    platform: ${OUTERNETAWG_PLATFORM:-linux/amd64}
+    container_name: outernetawg-nas
+    network_mode: host
+    restart: unless-stopped
+    user: "0:0"
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_ADMIN
+    devices:
+      - /dev/net/tun:/dev/net/tun
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /run/outernetawg:rw,noexec,nosuid,size=1m,mode=0700
+    secrets:
+      - outernetawg-profile
+    environment:
+      OUTERNETAWG_PROFILE_FILE: /run/secrets/outernetawg-profile
+      OUTERNETAWG_VPN_SUBNET: ${OUTERNETAWG_VPN_SUBNET:-10.110.0.0/16}
+      OUTERNETAWG_TUN_NAME: ${OUTERNETAWG_TUN_NAME:-oawgnas0}
+    stop_grace_period: 75s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+secrets:
+  outernetawg-profile:
+    file: ${OUTERNETAWG_PROFILE_PATH:-./secrets/OuternetAWG.conf}

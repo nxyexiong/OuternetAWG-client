@@ -66,6 +66,31 @@ func TestDualStackRoutes(t *testing.T) {
 	}
 }
 
+func TestSubnetEndpointDoesNotChangeFullTunnel(t *testing.T) {
+	p, err := Parse("NAS", strings.Replace(config(), "[Peer]", "ListenPort = 51820\n[Peer]", 1))
+	if err != nil {
+		t.Fatal(err)
+	}
+	endpoint := netip.MustParseAddr("192.0.2.1")
+	uapi, err := p.SubnetUAPI(endpoint, netip.MustParsePrefix("10.110.0.0/16"))
+	if err != nil || !strings.Contains(uapi, "allowed_ip=10.110.0.0/16\n") ||
+		strings.Count(uapi, "allowed_ip=") != 1 || !strings.Contains(uapi, "listen_port=0\n") {
+		t.Fatal("subnet endpoint settings", err)
+	}
+	if !strings.Contains(p.UAPI(endpoint), "allowed_ip=0.0.0.0/0\n") ||
+		!strings.Contains(p.UAPI(endpoint), "listen_port=51820\n") || len(p.Routes()) != 2 {
+		t.Fatal("subnet settings modified original profile")
+	}
+	for _, subnet := range []string{"0.0.0.0/0", "10.110.0.1/16", "10.111.0.0/16", "::/0", "10.110.0.2/32"} {
+		if _, err := p.SubnetUAPI(endpoint, netip.MustParsePrefix(subnet)); err == nil {
+			t.Fatal("accepted invalid subnet", subnet)
+		}
+	}
+	if _, err := p.SubnetUAPI(netip.MustParseAddr("10.110.0.1"), netip.MustParsePrefix("10.110.0.0/16")); err == nil {
+		t.Fatal("accepted endpoint loop")
+	}
+}
+
 func TestUnsafeAndInvalidConfigsRejected(t *testing.T) {
 	for name, text := range map[string]string{
 		"scripts":                strings.Replace(config(), "[Peer]", "PostUp = powershell.exe\n[Peer]", 1),
