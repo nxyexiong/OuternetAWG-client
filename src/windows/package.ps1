@@ -2,7 +2,6 @@
 [CmdletBinding()]
 param(
     [ValidateSet('x64', 'arm64')][string]$Architecture = 'x64',
-    [ValidatePattern('^\d+\.\d+\.\d+(\.\d+)?$')][string]$Version = '1.0.0',
     [switch]$SkipBuild
 )
 
@@ -10,6 +9,8 @@ $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 $Architecture = $Architecture.ToLowerInvariant()
 $root = $PSScriptRoot
+. "$root\version.ps1"
+$Version = Get-WindowsClientVersion
 $release = Join-Path $root "dist\win-$Architecture"
 $output = Join-Path $root 'dist\installers'
 $cache = Join-Path $root '.cache'
@@ -48,8 +49,8 @@ foreach ($line in Get-Content -LiteralPath $manifest) {
     $destination = if ($parent) { "{app}\$parent" } else { '{app}' }
     $entries.Add(('Source: "{{#PayloadDir}}\{0}"; DestDir: "{1}"; Flags: ignoreversion' -f $relative, $destination))
 }
-foreach ($required in @('ui\OuternetAWG.exe', 'ui\OuternetAWG.ico', 'service\outernetawg-service.exe', 'service\wintun.dll',
-    'install.ps1', 'uninstall.ps1', 'README.md', 'LICENSE')) {
+foreach ($required in @('ui\OuternetAWG.exe', 'ui\OuternetAWG.dll', 'ui\OuternetAWG.ico', 'service\outernetawg-service.exe', 'service\wintun.dll',
+    'service\build-info.json', 'install.ps1', 'uninstall.ps1', 'README.md', 'LICENSE')) {
     if (-not $files.Contains($required)) { throw "Required installer payload is missing: $required" }
 }
 foreach ($script in @('install.ps1', 'uninstall.ps1')) {
@@ -57,6 +58,8 @@ foreach ($script in @('install.ps1', 'uninstall.ps1')) {
         throw "Release contains an outdated $script. Rebuild without -SkipBuild."
     }
 }
+
+Assert-WindowsClientPayloadVersion -Release $release -Version $Version -Architecture $Architecture
 
 $image = [IO.File]::ReadAllBytes("$release\service\outernetawg-service.exe")
 $machine = [BitConverter]::ToUInt16($image, [BitConverter]::ToInt32($image, 0x3c) + 4)

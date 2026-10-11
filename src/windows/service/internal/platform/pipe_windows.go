@@ -73,6 +73,12 @@ func Serve(ctx context.Context, listener net.Listener, c *control.Controller) er
 					err = c.Connect(ctx)
 				case "disconnect":
 					err = c.Disconnect()
+				case "save-routing":
+					if request.Routing == nil {
+						err = errors.New("routing settings are required")
+					} else {
+						err = c.SaveRouting(*request.Routing)
+					}
 				default:
 					err = errors.New("unknown control command")
 				}

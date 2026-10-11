@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/nxyexiong/OuternetAWG-client/shared/profile"
+	"github.com/nxyexiong/OuternetAWG-client/windows/service/internal/routing"
 )
 
 type SavedProfile struct {
@@ -18,6 +19,8 @@ type SavedProfile struct {
 type Store interface {
 	Load() (*SavedProfile, error)
 	Save(SavedProfile) error
+	LoadRouting() (routing.State, error)
+	SaveRouting(routing.State) error
 }
 
 type Session interface {
@@ -25,7 +28,7 @@ type Session interface {
 	Close() error
 }
 
-type Connector func(context.Context, *profile.Profile) (Session, error)
+type Connector func(context.Context, *profile.Profile, routing.Profile) (Session, error)
 
 type Status struct {
 	State     string           `json:"state"`
@@ -33,6 +36,7 @@ type Status struct {
 	Message   string           `json:"message"`
 	Profile   *profile.Summary `json:"profile,omitempty"`
 	Handshake *time.Time       `json:"handshake,omitempty"`
+	Routing   routing.State    `json:"routing"`
 }
 
 type Controller struct {
@@ -44,10 +48,19 @@ type Controller struct {
 	started time.Time
 	status  Status
 	stopped bool
+	routing routing.State
 }
 
 func New(store Store, connect Connector) (*Controller, error) {
 	c := &Controller{store: store, connect: connect, status: Status{State: "disconnected", Message: "Import a config to get started."}}
+	var err error
+	c.routing, err = store.LoadRouting()
+	if err != nil {
+		return nil, err
+	}
+	if err = c.routing.Validate(); err != nil {
+		return nil, err
+	}
 	saved, err := store.Load()
 	if err != nil {
 		return nil, err
@@ -67,7 +80,27 @@ func New(store Store, connect Connector) (*Controller, error) {
 func (c *Controller) Status() Status {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	return c.status
+	status := c.status
+	status.Routing = c.routing.Clone()
+	return status
+}
+
+func (c *Controller) SaveRouting(settings routing.State) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.stopped || c.session != nil {
+		return errors.New("disconnect before changing routing profiles")
+	}
+	settings = settings.Clone()
+	if err := settings.Validate(); err != nil {
+		return err
+	}
+	if err := c.store.SaveRouting(settings); err != nil {
+		slog.Error("persist routing profiles", "error", err)
+		return errors.New("could not save routing profiles; the previous settings are unchanged")
+	}
+	c.routing = settings
+	return nil
 }
 
 func (c *Controller) Import(name, content string) error {
@@ -105,7 +138,11 @@ func (c *Controller) Connect(ctx context.Context) error {
 	if c.profile == nil {
 		return errors.New("import a config first")
 	}
-	session, err := c.connect(ctx, c.profile)
+	route, err := c.routing.Clone().Active()
+	if err != nil {
+		return err
+	}
+	session, err := c.connect(ctx, c.profile, route)
 	if err != nil {
 		slog.Error("tunnel connection failed", "error", err)
 		c.status.State, c.status.Message = "error", err.Error()
@@ -125,7 +162,7 @@ func (c *Controller) Refresh(now time.Time) {
 	}
 	handshake, err := c.session.Handshake()
 	if err != nil {
-		c.status.State, c.status.Message = "error", err.Error()+" Disconnect and reconnect. Traffic remains blocked outside the tunnel."
+		c.status.State, c.status.Message = "error", err.Error()+" Disconnect and reconnect. The selected routing policy remains active."
 		return
 	}
 	if handshake.IsZero() {
@@ -137,9 +174,9 @@ func (c *Controller) Refresh(now time.Time) {
 	}
 	c.status.Handshake = &handshake
 	if now.Sub(handshake) > 3*time.Minute {
-		c.status.State, c.status.Message = "waiting", "Waiting for a fresh handshake. Traffic remains inside the tunnel."
+		c.status.State, c.status.Message = "waiting", "Waiting for a fresh handshake. The selected routing policy remains active."
 	} else {
-		c.status.State, c.status.Message = "connected", "Connected. Your traffic is routed through Outernet."
+		c.status.State, c.status.Message = "connected", "Connected. The selected routing profile is active."
 	}
 }
 

@@ -1,14 +1,17 @@
 package platform
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"unsafe"
 
 	"github.com/nxyexiong/OuternetAWG-client/windows/service/internal/control"
+	"github.com/nxyexiong/OuternetAWG-client/windows/service/internal/routing"
 	"golang.org/x/sys/windows"
 )
 
@@ -87,12 +90,55 @@ func (s Store) Save(saved control.SavedProfile) error {
 		return err
 	}
 	defer windows.LocalFree(windows.Handle(unsafe.Pointer(out.Data)))
-	tmp, err := os.CreateTemp(s.Directory, "profile-*.tmp")
+	return s.writeAtomic("profile.dpapi", unsafe.Slice(out.Data, out.Size))
+}
+
+func (s Store) LoadRouting() (routing.State, error) {
+	f, err := os.Open(filepath.Join(s.Directory, "routing.json"))
+	if errors.Is(err, os.ErrNotExist) {
+		return routing.Default(), nil
+	}
+	if err != nil {
+		return routing.State{}, err
+	}
+	defer f.Close()
+	data, err := io.ReadAll(io.LimitReader(f, control.MaxFrame+1))
+	if err != nil {
+		return routing.State{}, err
+	}
+	if len(data) > control.MaxFrame {
+		return routing.State{}, errors.New("routing settings file is too large")
+	}
+	var state routing.State
+	decoder := json.NewDecoder(bytes.NewReader(data))
+	decoder.DisallowUnknownFields()
+	if err = decoder.Decode(&state); err != nil {
+		return state, fmt.Errorf("read routing settings: %w", err)
+	}
+	if decoder.Decode(new(any)) != io.EOF {
+		return state, errors.New("trailing routing settings data")
+	}
+	return state, state.Validate()
+}
+
+func (s Store) SaveRouting(state routing.State) error {
+	if err := state.Validate(); err != nil {
+		return err
+	}
+	data, err := json.Marshal(state)
+	if err != nil {
+		return err
+	}
+	return s.writeAtomic("routing.json", data)
+}
+
+func (s Store) writeAtomic(name string, data []byte) error {
+	tmp, err := os.CreateTemp(s.Directory, "settings-*.tmp")
 	if err != nil {
 		return err
 	}
 	defer os.Remove(tmp.Name())
-	_, writeErr := tmp.Write(unsafe.Slice(out.Data, out.Size))
+	_, writeErr := tmp.Write(data)
 	syncErr, closeErr := tmp.Sync(), tmp.Close()
 	if err = errors.Join(writeErr, syncErr, closeErr); err != nil {
 		return err
@@ -101,7 +147,7 @@ func (s Store) Save(saved control.SavedProfile) error {
 	if err != nil {
 		return err
 	}
-	to, err := windows.UTF16PtrFromString(filepath.Join(s.Directory, "profile.dpapi"))
+	to, err := windows.UTF16PtrFromString(filepath.Join(s.Directory, name))
 	if err != nil {
 		return err
 	}

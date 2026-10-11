@@ -12,13 +12,28 @@ import (
 	"time"
 
 	"github.com/nxyexiong/OuternetAWG-client/shared/profile"
+	"github.com/nxyexiong/OuternetAWG-client/windows/service/internal/routing"
 )
 
 type memoryStore struct {
-	saved *SavedProfile
-	fail  bool
+	saved  *SavedProfile
+	fail   bool
+	routes *routing.State
 }
 
+func (s *memoryStore) LoadRouting() (routing.State, error) {
+	if s.routes == nil {
+		return routing.Default(), nil
+	}
+	return s.routes.Clone(), nil
+}
+func (s *memoryStore) SaveRouting(state routing.State) error {
+	if s.fail {
+		return errors.New("disk full")
+	}
+	s.routes = &state
+	return nil
+}
 func (s *memoryStore) Load() (*SavedProfile, error) { return s.saved, nil }
 func (s *memoryStore) Save(p SavedProfile) error {
 	if s.fail {
@@ -44,7 +59,7 @@ func testConfig() string {
 
 func TestLifecycleOnlyConnectedAfterHandshake(t *testing.T) {
 	store, session := &memoryStore{}, &fakeSession{}
-	c, err := New(store, func(context.Context, *profile.Profile) (Session, error) { return session, nil })
+	c, err := New(store, func(context.Context, *profile.Profile, routing.Profile) (Session, error) { return session, nil })
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -106,7 +121,9 @@ func TestFailedSavePreservesProfile(t *testing.T) {
 
 func TestFailuresAreVisibleAndShutdownPreventsReconnect(t *testing.T) {
 	store := &memoryStore{}
-	c, _ := New(store, func(context.Context, *profile.Profile) (Session, error) { return nil, errors.New("route setup failed") })
+	c, _ := New(store, func(context.Context, *profile.Profile, routing.Profile) (Session, error) {
+		return nil, errors.New("route setup failed")
+	})
 	c.Import("One", testConfig())
 	if c.Connect(context.Background()) == nil || c.Status().State != "error" || c.Status().Active {
 		t.Fatal("failed connect looked successful")
@@ -122,7 +139,7 @@ func TestConnectionFailureIsLoggedWithoutProfileKeys(t *testing.T) {
 	previous := slog.Default()
 	slog.SetDefault(slog.New(slog.NewTextHandler(&output, nil)))
 	defer slog.SetDefault(previous)
-	c, err := New(&memoryStore{}, func(context.Context, *profile.Profile) (Session, error) {
+	c, err := New(&memoryStore{}, func(context.Context, *profile.Profile, routing.Profile) (Session, error) {
 		return nil, errors.New("Windows service identity is missing")
 	})
 	if err != nil {

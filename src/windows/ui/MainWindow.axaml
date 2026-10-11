@@ -21,17 +21,20 @@
               <Button Name="MaximizeButton" Classes="traffic" Background="{DynamicResource MaximizeFill}" BorderBrush="{DynamicResource MaximizeBorder}"
                       Click="MaximizeClicked" ToolTip.Tip="{Binding Text[Window.Maximize]}" AutomationProperties.Name="{Binding Text[Window.Maximize]}" />
             </StackPanel>
-            <TextBlock Grid.Column="1" Text="OuternetAWG" FontSize="12" Foreground="{DynamicResource CaptionText}"
+            <TextBlock Name="AppTitle" Grid.Column="1" Text="OuternetAWG" FontSize="12" Foreground="{DynamicResource CaptionText}"
                        HorizontalAlignment="Center" VerticalAlignment="Center" Margin="0,0,164,0" />
           </Grid>
         </Border>
         <Grid Grid.Row="1" RowDefinitions="Auto,Auto,*,Auto" Margin="16,18,16,22">
-          <StackPanel Margin="10,0,0,34" Spacing="7">
+          <StackPanel Name="SidebarBrand" Margin="10,0,0,34" Spacing="7">
             <Border Width="38" Height="38" Background="{DynamicResource AccentBrush}" CornerRadius="12" HorizontalAlignment="Left" Margin="0,0,0,5">
               <Path Data="M 8,19 A 11,11 0 1 1 30,19 A 11,11 0 1 1 8,19 M 8,19 L 30,19 M 19,8 C 11,13 11,25 19,30 M 19,8 C 27,13 27,25 19,30"
                     Stroke="{DynamicResource AccentForeground}" StrokeThickness="1.5" />
             </Border>
-            <TextBlock Text="Outernet" FontSize="22" FontWeight="SemiBold" LetterSpacing="-0.5" />
+            <TextBlock Name="BrandName" Text="Outernet" FontSize="22" FontWeight="SemiBold" LetterSpacing="-0.5" />
+            <TextBlock Name="AppVersionLabel" Text="{Binding AppVersion}" FontSize="11"
+                       Foreground="{DynamicResource CaptionText}" TextTrimming="CharacterEllipsis"
+                       ToolTip.Tip="{Binding AppVersion}" />
           </StackPanel>
           <StackPanel Grid.Row="1" Spacing="5">
             <Button Classes="nav" Classes.selected="{Binding IsConnectionPage}" Click="ConnectionClicked">
@@ -108,7 +111,7 @@
           </Grid>
           <ScrollViewer Name="ConfigurationScroller" Grid.Row="2" HorizontalScrollBarVisibility="Disabled" IsVisible="{Binding IsConfigurationPage}">
             <StackPanel Spacing="16">
-              <Border Classes="card">
+              <Border Classes="card" Padding="20">
                 <StackPanel Spacing="10">
                   <TextBlock Text="{Binding Text[Configuration.Current]}" FontWeight="SemiBold" FontSize="16" />
                   <TextBlock Text="{Binding ProfileName}" TextWrapping="Wrap" />
@@ -128,7 +131,10 @@
               </Border>
             </StackPanel>
           </ScrollViewer>
-          <Border Name="SettingsPage" Grid.Row="2" Classes="card" IsVisible="{Binding IsSettingsPage}" VerticalAlignment="Top">
+          <Border Name="SettingsPage" Grid.Row="2" IsVisible="{Binding IsSettingsPage}">
+            <ScrollViewer Name="SettingsScroller" HorizontalScrollBarVisibility="Disabled">
+              <StackPanel Spacing="16">
+                <Border Classes="card">
             <Grid ColumnDefinitions="*,220" RowDefinitions="Auto,Auto,Auto" RowSpacing="22" ColumnSpacing="16">
               <TextBlock Grid.ColumnSpan="2" Text="{Binding Text[Settings.General]}" FontSize="16" FontWeight="SemiBold" />
               <TextBlock Grid.Row="1" Text="{Binding Text[Settings.Theme]}" VerticalAlignment="Center" />
@@ -152,6 +158,29 @@
                 </ComboBox.ItemTemplate>
               </ComboBox>
             </Grid>
+                </Border>
+                <Border Name="RoutingCard" Classes="card" Padding="20">
+                  <StackPanel Spacing="12">
+                    <TextBlock Text="{Binding Text[Routing.Title]}" FontSize="16" FontWeight="SemiBold" />
+                    <ComboBox Name="RoutingProfileSelector" ItemsSource="{Binding Routing.Profiles}"
+                              SelectedItem="{Binding Routing.Selected, Mode=OneWay}" SelectionChanged="RouteSelectionChanged"
+                              IsEnabled="{Binding Routing.CanChange}" HorizontalAlignment="Stretch"
+                              AutomationProperties.Name="{Binding Text[Routing.Profile]}">
+                      <ComboBox.ItemTemplate>
+                        <DataTemplate x:DataType="vm:PreferenceChoice"><TextBlock Text="{Binding Label}" TextTrimming="CharacterEllipsis" /></DataTemplate>
+                      </ComboBox.ItemTemplate>
+                    </ComboBox>
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                      <Button Name="NewRouteButton" Content="{Binding Text[Routing.New]}" Click="NewRouteClicked" IsEnabled="{Binding Routing.CanChange}" />
+                      <Button Name="EditRouteButton" Content="{Binding Text[Routing.Edit]}" Click="EditRouteClicked" IsEnabled="{Binding Routing.CanEdit}" />
+                      <Button Name="DeleteRouteButton" Content="{Binding Text[Routing.Delete]}" Click="DeleteRouteClicked" IsEnabled="{Binding Routing.CanEdit}" />
+                    </StackPanel>
+                    <TextBlock Text="{Binding Routing.Notice}" IsVisible="{Binding Routing.HasNotice}"
+                               Classes="muted" FontSize="11" TextWrapping="Wrap" />
+                  </StackPanel>
+                </Border>
+              </StackPanel>
+            </ScrollViewer>
           </Border>
         </Grid>
       </Grid>

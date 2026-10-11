@@ -21,8 +21,9 @@ import (
 	"github.com/amnezia-vpn/amneziawg-go/v3/tun"
 	"github.com/nxyexiong/OuternetAWG-client/shared/profile"
 	"github.com/nxyexiong/OuternetAWG-client/windows/service/internal/control"
+	"github.com/nxyexiong/OuternetAWG-client/windows/service/internal/firewall"
+	"github.com/nxyexiong/OuternetAWG-client/windows/service/internal/routing"
 	"golang.org/x/sys/windows"
-	"golang.zx2c4.com/wireguard/windows/tunnel/firewall"
 	"golang.zx2c4.com/wireguard/windows/tunnel/winipcfg"
 )
 
@@ -55,7 +56,7 @@ func VerifyWintun() error {
 	return nil
 }
 
-func Connect(ctx context.Context, p *profile.Profile) (result control.Session, err error) {
+func Connect(ctx context.Context, p *profile.Profile, policy routing.Profile) (result control.Session, err error) {
 	if err = requireServiceIdentity(); err != nil {
 		return nil, err
 	}
@@ -83,6 +84,10 @@ func Connect(ctx context.Context, p *profile.Profile) (result control.Session, e
 	}
 	if physical == nil {
 		return nil, errors.New("no usable route to the VPN server; check your network connection")
+	}
+	routes, err := prepareRouting(p, policy, endpoint)
+	if err != nil {
+		return nil, err
 	}
 	adapters, err := winipcfg.GetAdaptersAddresses(windows.AF_UNSPEC, winipcfg.GAAFlagDefault)
 	if err != nil {
@@ -124,11 +129,11 @@ func Connect(ctx context.Context, p *profile.Profile) (result control.Session, e
 		return nil, errors.New("AmneziaWG rejected the config; check its keys and obfuscation parameters")
 	}
 	// Install the dynamic WFP boundary before enabling any tunnel routes.
-	if err = firewall.EnableFirewall(uint64(session.luid), false, p.DNS); err != nil {
+	if err = firewall.EnableFirewall(uint64(session.luid), policy, p.DNS); err != nil {
 		return nil, fmt.Errorf("enable tunnel leak protection: %w", err)
 	}
 	session.firewall = true
-	if err = session.configure(ctx, p); err != nil {
+	if err = session.configure(ctx, p, policy.Base == routing.VPN); err != nil {
 		return nil, err
 	}
 	if err = session.addEscape(endpoint, physical); err != nil {
@@ -147,13 +152,16 @@ func Connect(ctx context.Context, p *profile.Profile) (result control.Session, e
 			return nil, fmt.Errorf("bind VPN transport to uplink: %w", err)
 		}
 	}
-	for _, prefix := range p.Routes() {
+	for _, prefix := range routes {
+		if err = ctx.Err(); err != nil {
+			return nil, err
+		}
 		nextHop := netip.IPv4Unspecified()
 		if prefix.Addr().Is6() {
 			nextHop = netip.IPv6Unspecified()
 		}
 		if err = session.luid.AddRoute(prefix, nextHop, 0); err != nil {
-			return nil, fmt.Errorf("install full-tunnel route: %w", err)
+			return nil, fmt.Errorf("install routing-profile destination %s: %w", prefix, err)
 		}
 	}
 	if err = ctx.Err(); err != nil {
@@ -200,7 +208,7 @@ func bestRoute(endpoint netip.Addr) (*winipcfg.MibIPforwardRow2, error) {
 	return best, nil
 }
 
-func (s *tunnelSession) configure(ctx context.Context, p *profile.Profile) error {
+func (s *tunnelSession) configure(ctx context.Context, p *profile.Profile, useVPNDNS bool) error {
 	families := []winipcfg.AddressFamily{windows.AF_INET}
 	for _, prefix := range p.Addresses {
 		if prefix.Addr().Is6() {
@@ -222,10 +230,13 @@ func (s *tunnelSession) configure(ctx context.Context, p *profile.Profile) error
 			return fmt.Errorf("configure tunnel interface: %w", err)
 		}
 	}
-	if err := s.luid.AddIPAddresses(p.Addresses); err != nil {
+	if err := s.luid.AddIPAddresses(hostAddresses(p.Addresses)); err != nil {
 		return fmt.Errorf("assign tunnel address: %w", err)
 	}
 	for _, family := range families {
+		if !useVPNDNS {
+			continue
+		}
 		if err := s.luid.SetDNS(family, p.DNS, nil); err != nil {
 			return fmt.Errorf("configure tunnel DNS: %w", err)
 		}

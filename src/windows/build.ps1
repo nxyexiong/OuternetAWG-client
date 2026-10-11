@@ -5,6 +5,8 @@ param([ValidateSet('x64', 'arm64')][string]$Architecture = 'x64')
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 $root = $PSScriptRoot
+. "$root\version.ps1"
+$version = Get-WindowsClientVersion
 $cache = Join-Path $root '.cache'
 $output = Join-Path $root "dist\win-$Architecture"
 New-Item -ItemType Directory -Force -Path $cache, $output | Out-Null
@@ -51,8 +53,19 @@ try {
     $env:CGO_ENABLED = '0'
     Invoke-Checked { go mod download }
     Invoke-Checked { go mod verify }
-    $flags = "-s -w -X github.com/nxyexiong/OuternetAWG-client/windows/service/internal/platform.WintunSHA256=$dllHash"
+    $flags = "-s -w -X main.ClientVersion=$version -X github.com/nxyexiong/OuternetAWG-client/windows/service/internal/platform.WintunSHA256=$dllHash"
     Invoke-Checked { go build -trimpath -ldflags $flags -o "$output\service\outernetawg-service.exe" .\cmd\outernetawg-service }
+    if ([Runtime.InteropServices.RuntimeInformation]::OSArchitecture.ToString().ToLowerInvariant() -eq $Architecture) {
+        $identity = & "$output\service\outernetawg-service.exe" --version
+        if ($LASTEXITCODE -ne 0 -or $identity -cnotlike "OuternetAWG Windows service $version;*") {
+            throw 'The built Windows service did not report the authoritative client version.'
+        }
+    }
+    [ordered]@{
+        version = $version
+        architecture = $Architecture
+        sha256 = (Get-FileHash -LiteralPath "$output\service\outernetawg-service.exe" -Algorithm SHA256).Hash.ToLowerInvariant()
+    } | ConvertTo-Json | Set-Content -LiteralPath "$output\service\build-info.json" -Encoding utf8NoBOM
     $modules = & go list -m -f '{{.Path}}|{{.Version}}|{{.Dir}}' all
     if ($LASTEXITCODE -ne 0) { throw 'Could not collect dependency licenses.' }
     $modules | Set-Content -LiteralPath "$output\licenses\go-modules.txt" -Encoding utf8
@@ -72,10 +85,12 @@ finally {
     $env:GOOS, $env:GOARCH, $env:CGO_ENABLED = $previousOS, $previousArch, $previousCGO
 }
 
-Invoke-Checked { dotnet publish "$root\ui\OuternetAWG.UI.csproj" -c Release -r "win-$Architecture" --self-contained true --nologo --verbosity quiet -o "$output\ui" }
+Invoke-Checked { dotnet publish "$root\ui\OuternetAWG.UI.csproj" "-p:Version=$version" -c Release -r "win-$Architecture" --self-contained true --nologo --verbosity quiet -o "$output\ui" }
+Assert-WindowsClientPayloadVersion -Release $output -Version $version -Architecture $Architecture
 Copy-Item -LiteralPath "$root\install.ps1", "$root\uninstall.ps1", "$root\README.md" -Destination $output -Force
 Copy-Item -LiteralPath "$root\..\..\LICENSE" -Destination "$output\LICENSE" -Force
 Copy-Item -LiteralPath "$root\THIRD-PARTY-NOTICES.txt" -Destination "$output\licenses\THIRD-PARTY-NOTICES.txt" -Force
+Copy-Item -LiteralPath "$root\service\internal\firewall\LICENSE" -Destination "$output\licenses\OuternetAWG-WFP-MIT.txt" -Force
 Invoke-WebRequest -Uri 'https://raw.githubusercontent.com/AvaloniaUI/Avalonia/11.3.22/licence.md' -OutFile "$output\licenses\Avalonia.txt"
 
 $assets = Get-Content -LiteralPath "$root\ui\obj\project.assets.json" -Raw | ConvertFrom-Json -AsHashtable
@@ -129,5 +144,5 @@ $manifest = Get-ChildItem -LiteralPath $output -Recurse -File |
     Sort-Object FullName |
     ForEach-Object { '{0}  {1}' -f (Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant(), [IO.Path]::GetRelativePath($output, $_.FullName) }
 $manifest | Set-Content -LiteralPath "$output\SHA256SUMS" -Encoding ascii
-Write-Host "Release ready: $output"
+Write-Host "Windows client $version release ready: $output"
 Write-Host 'No service was installed and no network settings were changed.'

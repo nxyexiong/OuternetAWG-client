@@ -222,8 +222,10 @@ public sealed class PreferencesTests
                 window.UpdateLayout();
                 var settings = window.FindControl<Border>("SettingsPage")!;
                 ClientTests.AssertContained(settings, window.FindControl<Grid>("ContentPanel")!);
-                foreach (var child in settings.GetVisualDescendants().OfType<Control>().Where(x => x.IsEffectivelyVisible))
-                    ClientTests.AssertContained(child, settings);
+                ClientTests.AssertContained(window.FindControl<ScrollViewer>("SettingsScroller")!, settings);
+                foreach (var settingsCard in settings.GetVisualDescendants().OfType<Border>().Where(x => x.Classes.Contains("card")))
+                    foreach (var child in settingsCard.GetVisualDescendants().OfType<Control>().Where(x => x.IsEffectivelyVisible))
+                        ClientTests.AssertContained(child, settingsCard);
                 using (var frame = window.CaptureRenderedFrame())
                     frame!.Save(Path.Combine(AppContext.BaseDirectory, $"settings-{language}-{theme}.png"));
                 foreach (var state in new[] { "connected", "connecting", "waiting", "error" })

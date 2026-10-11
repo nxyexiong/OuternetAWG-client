@@ -10,9 +10,11 @@ using Microsoft.Win32.SafeHandles;
 namespace OuternetAWG.Services;
 
 public sealed record ProfileSummary(string Name, string Endpoint, string Address);
-public sealed record TunnelStatus(string State, bool Active, string Message, ProfileSummary? Profile, DateTimeOffset? Handshake);
+public sealed record TunnelStatus(string State, bool Active, string Message, ProfileSummary? Profile, DateTimeOffset? Handshake,
+    RoutingState? Routing = null);
 public sealed record ServiceResponse(int Version, bool Ok, string? Error, TunnelStatus Status);
-public sealed record ServiceRequest(int Version, string Command, string? Name = null, string? Config = null);
+public sealed record ServiceRequest(int Version, string Command, string? Name = null, string? Config = null,
+    RoutingState? Routing = null);
 
 public interface IServiceClient
 {
@@ -20,6 +22,7 @@ public interface IServiceClient
     Task StopAsync(CancellationToken cancellationToken = default);
     Task<TunnelStatus> SendAsync(string command, string? name = null, string? config = null,
         CancellationToken cancellationToken = default);
+    Task<TunnelStatus> SaveRoutingAsync(RoutingState routing, CancellationToken cancellationToken = default);
 }
 
 public sealed class ServiceClient : IServiceClient
@@ -152,19 +155,25 @@ public sealed class ServiceClient : IServiceClient
         return status;
     }
 
-    public async Task<TunnelStatus> SendAsync(string command, string? name = null, string? config = null,
-        CancellationToken cancellationToken = default)
+    public Task<TunnelStatus> SendAsync(string command, string? name = null, string? config = null,
+        CancellationToken cancellationToken = default) =>
+        SendRequestAsync(new(1, command, name, config), cancellationToken);
+
+    public Task<TunnelStatus> SaveRoutingAsync(RoutingState routing, CancellationToken cancellationToken = default) =>
+        SendRequestAsync(new(1, "save-routing", Routing: routing), cancellationToken);
+
+    private async Task<TunnelStatus> SendRequestAsync(ServiceRequest request, CancellationToken cancellationToken)
     {
         if (!OperatingSystem.IsWindows()) throw new ClientException("Error.Windows");
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        timeout.CancelAfter(command == "status" ? TimeSpan.FromSeconds(3) : TimeSpan.FromSeconds(40));
+        timeout.CancelAfter(request.Command == "status" ? TimeSpan.FromSeconds(3) : TimeSpan.FromSeconds(40));
         await using var pipe = new NamedPipeClientStream(".", "OuternetAWG.Control.v1",
             PipeDirection.InOut, PipeOptions.Asynchronous, TokenImpersonationLevel.Anonymous);
         try
         {
             await pipe.ConnectAsync(timeout.Token);
             VerifyService(pipe.SafePipeHandle);
-            var payload = JsonSerializer.SerializeToUtf8Bytes(new ServiceRequest(1, command, name, config), Json);
+            var payload = JsonSerializer.SerializeToUtf8Bytes(request, Json);
             if (payload.Length > MaxFrame) throw new ClientException("Error.ConfigSize");
             try
             {

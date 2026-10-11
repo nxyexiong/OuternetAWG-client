@@ -1,4 +1,5 @@
 using System.ComponentModel;
+using System.Reflection;
 using System.Runtime.CompilerServices;
 using OuternetAWG.Services;
 
@@ -18,12 +19,18 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     private string _pastedConfig = "";
     public event PropertyChangedEventHandler? PropertyChanged;
     public PreferencesViewModel Preferences { get; }
+    public RoutingViewModel Routing { get; }
     public LocalizationService Text => Preferences.Text;
+    public string AppVersion { get; } = "v" + (typeof(MainViewModel).Assembly
+        .GetCustomAttribute<AssemblyInformationalVersionAttribute>()
+        ?? throw new InvalidOperationException("Application version metadata is missing."))
+        .InformationalVersion.Split('+')[0];
 
     public MainViewModel(IServiceClient client, PreferencesViewModel? preferences = null)
     {
         _client = client;
         Preferences = preferences ?? new();
+        Routing = new(this);
         Text.PropertyChanged += LanguageChanged;
     }
 
@@ -91,6 +98,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         {
             var status = await _client.SendAsync("status", cancellationToken: token);
             if (revision != _revision || _busy) return;
+            Routing.Synchronize(status.Routing);
             _status = status;
             _available = true;
             if (_availabilityError) _error = null;
@@ -108,6 +116,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     }
 
     public Task ToggleAsync() => RunAsync(() => _client.SendAsync(_status?.Active == true ? "disconnect" : "connect"));
+    public Task<bool> SaveRoutingAsync(RoutingState routing) => RunAsync(() => _client.SaveRoutingAsync(routing));
 
     public async Task ImportAsync(string name, string config)
     {
@@ -127,7 +136,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         {
             await _client.StopAsync();
             _stopped = true;
-            return new TunnelStatus("disconnected", false, "", _status?.Profile, null);
+            return new TunnelStatus("disconnected", false, "", _status?.Profile, null, _status?.Routing);
         });
         _shutdownFailed = !success;
         NotifyAll();
@@ -145,7 +154,9 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         NotifyAll();
         try
         {
-            _status = await operation();
+            var status = await operation();
+            Routing.Synchronize(status.Routing);
+            _status = status;
             _available = true;
             return true;
         }
@@ -172,6 +183,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     public void Dispose()
     {
         Text.PropertyChanged -= LanguageChanged;
+        Routing.Dispose();
         Preferences.Dispose();
     }
 }

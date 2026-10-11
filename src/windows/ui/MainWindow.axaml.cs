@@ -5,6 +5,7 @@ using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Platform.Storage;
 using Avalonia.VisualTree;
+using Avalonia.Threading;
 using OuternetAWG.Services;
 using OuternetAWG.ViewModels;
 
@@ -53,6 +54,55 @@ public sealed partial class MainWindow : Window
     private async void ConnectClicked(object? sender, RoutedEventArgs e) => await _model.ToggleAsync();
     private async void UseConfigClicked(object? sender, RoutedEventArgs e) =>
         await _model.ImportAsync(_model.Text["Configuration.ImportedName"], _model.PasteConfig);
+
+    private async void RouteSelectionChanged(object? sender, SelectionChangedEventArgs e)
+    {
+        if (DataContext is MainViewModel model && sender is ComboBox { SelectedItem: PreferenceChoice choice } selector)
+        {
+            await model.Routing.SelectAsync(choice.Id);
+            // Restore rejected selections after ComboBox finishes its selection event.
+            if (selector.SelectedItem != model.Routing.Selected)
+                Dispatcher.UIThread.Post(() => selector.SetCurrentValue(ComboBox.SelectedItemProperty, model.Routing.Selected));
+        }
+    }
+
+    private async void NewRouteClicked(object? sender, RoutedEventArgs e)
+    {
+        if (_model.Routing.CanChange) await new RouteProfileWindow(_model, true).ShowDialog<bool>(this);
+    }
+
+    private async void EditRouteClicked(object? sender, RoutedEventArgs e)
+    {
+        if (_model.Routing.CanEdit) await new RouteProfileWindow(_model, false).ShowDialog<bool>(this);
+    }
+
+    private async void DeleteRouteClicked(object? sender, RoutedEventArgs e)
+    {
+        if (!_model.Routing.CanEdit) return;
+        var selected = _model.Routing.Current.Id;
+        var dialog = new Window
+        {
+            Title = _model.Text["Routing.Delete"], Width = 440, SizeToContent = SizeToContent.Height,
+            CanResize = false, ShowInTaskbar = false, WindowStartupLocation = WindowStartupLocation.CenterOwner,
+            Background = Background
+        };
+        var cancel = new Button { Content = _model.Text["Routing.Cancel"] };
+        var delete = new Button { Content = _model.Text["Routing.Delete"], Classes = { "primary" } };
+        cancel.Click += (_, _) => dialog.Close(false);
+        delete.Click += (_, _) => dialog.Close(true);
+        dialog.Content = new StackPanel
+        {
+            Margin = new Thickness(24), Spacing = 20,
+            Children =
+            {
+                new TextBlock { Text = _model.Text.Format("Routing.DeleteConfirm", _model.Routing.Current.Name), TextWrapping = Avalonia.Media.TextWrapping.Wrap },
+                new StackPanel { Orientation = Avalonia.Layout.Orientation.Horizontal, HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Right,
+                    Spacing = 10, Children = { cancel, delete } }
+            }
+        };
+        if (await dialog.ShowDialog<bool>(this) && _model.Routing.Current.Id == selected)
+            await _model.Routing.DeleteAsync();
+    }
 
     private async void ImportClicked(object? sender, RoutedEventArgs e)
     {

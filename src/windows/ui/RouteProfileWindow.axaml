@@ -1,0 +1,40 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:OuternetAWG.ViewModels"
+        x:Class="OuternetAWG.RouteProfileWindow" x:DataType="vm:RouteEditorViewModel"
+        Title="{Binding Title}" Width="570" Height="650" MinWidth="460" MinHeight="510"
+        WindowStartupLocation="CenterOwner" ShowInTaskbar="False"
+        Background="{DynamicResource WindowBackground}">
+  <Grid Margin="24" RowDefinitions="Auto,Auto,*,Auto" RowSpacing="16">
+    <TextBlock Text="{Binding Title}" FontSize="23" FontWeight="SemiBold" />
+    <Border Grid.Row="1" Classes="error" IsVisible="{Binding HasError}" Margin="0">
+      <TextBlock Text="{Binding Error}" />
+    </Border>
+    <ScrollViewer Grid.Row="2" HorizontalScrollBarVisibility="Disabled">
+      <StackPanel Spacing="12">
+        <TextBlock Text="{Binding Text[Routing.Name]}" FontWeight="SemiBold" />
+        <TextBox Name="RouteNameInput" Text="{Binding Name}" MaxLength="128"
+                 Watermark="{Binding Text[Routing.NamePlaceholder]}" />
+        <TextBlock Text="{Binding Text[Routing.Base]}" FontWeight="SemiBold" Margin="0,4,0,0" />
+        <ComboBox Name="RouteBaseSelector" ItemsSource="{Binding Bases}" SelectedItem="{Binding Base, Mode=TwoWay}"
+                  HorizontalAlignment="Stretch" AutomationProperties.Name="{Binding Text[Routing.Base]}">
+          <ComboBox.ItemTemplate>
+            <DataTemplate x:DataType="vm:PreferenceChoice"><TextBlock Text="{Binding Label}" /></DataTemplate>
+          </ComboBox.ItemTemplate>
+        </ComboBox>
+        <TextBlock Text="{Binding BaseHint}" Classes="muted" FontSize="12" TextWrapping="Wrap" />
+        <TextBlock Text="{Binding Text[Routing.Rules]}" FontWeight="SemiBold" Margin="0,4,0,0" />
+        <TextBox Name="RouteRulesInput" Text="{Binding Rules}" AcceptsReturn="True" Height="145"
+                 MaxLength="8192" FontFamily="Cascadia Mono, Consolas" FontSize="12"
+                 Watermark="192.168.0.0/16 direct&#10;10.110.0.0/16 vpn"
+                 AutomationProperties.Name="{Binding Text[Routing.Rules]}" />
+        <TextBlock Text="{Binding Text[Routing.RulesHint]}" Classes="muted" FontSize="12" TextWrapping="Wrap" />
+      </StackPanel>
+    </ScrollViewer>
+    <StackPanel Grid.Row="3" Orientation="Horizontal" HorizontalAlignment="Right" Spacing="10">
+      <Button Name="RouteCancelButton" Content="{Binding Text[Routing.Cancel]}" Click="CancelClicked" />
+      <Button Name="RouteSaveButton" Classes="primary" Content="{Binding Text[Routing.Save]}"
+              IsEnabled="{Binding CanSave}" Click="SaveClicked" />
+    </StackPanel>
+  </Grid>
+</Window>

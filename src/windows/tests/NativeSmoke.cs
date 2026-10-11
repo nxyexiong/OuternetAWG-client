@@ -16,21 +16,58 @@ internal static class NativeSmoke
     [STAThread]
     public static int Main(string[] args)
     {
-        if (args.Length != 1 || args[0] != "--native-smoke" || !OperatingSystem.IsWindows())
+        if (args.Length != 1 || args[0] is not ("--native-smoke" or "--preview") || !OperatingSystem.IsWindows())
         {
-            Console.Error.WriteLine("Use --native-smoke on Windows. The harness uses a fake service and never changes networking.");
+            Console.Error.WriteLine("Use --native-smoke or --preview on Windows. Both use a fake service and never change networking.");
             return 2;
         }
         AppBuilder.Configure<App>().UseWin32().UseSkia().SetupWithoutStarting();
         var result = 1;
         Dispatcher.UIThread.Post(async () =>
         {
+            if (args[0] == "--preview")
+            {
+                try { await PreviewAsync(); result = 0; }
+                catch (Exception ex) { Console.Error.WriteLine(ex); Dispatcher.UIThread.InvokeShutdown(); }
+                return;
+            }
             try { await VerifyAsync(); result = 0; }
             catch (Exception ex) { Console.Error.WriteLine(ex); }
             finally { Dispatcher.UIThread.InvokeShutdown(); }
         });
         Dispatcher.UIThread.MainLoop(CancellationToken.None);
         return result;
+    }
+
+    private static async Task PreviewAsync()
+    {
+        var path = Path.Combine(AppContext.BaseDirectory, "preview-routing.json");
+        var service = new FakeService();
+        if (File.Exists(path))
+            service.Status = service.Status with { Routing = JsonSerializer.Deserialize<RoutingState>(File.ReadAllText(path))
+                ?? throw new InvalidDataException("Invalid preview routing settings.") };
+        service.PersistRouting = state =>
+        {
+            var temporary = path + ".tmp";
+            try
+            {
+                File.WriteAllText(temporary, JsonSerializer.Serialize(state));
+                File.Move(temporary, path, overwrite: true);
+            }
+            finally { if (File.Exists(temporary)) File.Delete(temporary); }
+        };
+        var preferences = TestApp.Preferences(theme => Application.Current!.RequestedThemeVariant = theme);
+        var window = new MainWindow(service, preferences) { Title = "OuternetAWG - UI preview (no VPN)" };
+        window.FindControl<TextBlock>("AppTitle")!.Text = "UI preview - no VPN";
+        var tray = new TrayController(window, () => Dispatcher.UIThread.InvokeShutdown());
+        window.Closed += (_, _) => { tray.Dispose(); Dispatcher.UIThread.InvokeShutdown(); };
+        window.Model.Navigate(ClientPage.Settings);
+        window.Show();
+        await Task.Delay(500);
+        if (!window.IsVisible || !window.Model.Routing.CanChange) throw new InvalidOperationException("Preview failed to initialize.");
+        SaveFrame(window, "routing-preview.png");
+        Console.WriteLine(JsonSerializer.Serialize(new { PreviewReady = true, ProcessId = Environment.ProcessId,
+            WindowHandle = window.TryGetPlatformHandle()!.Handle.ToInt64(), RealServiceTouched = false, RoutingStateFile = path }));
     }
 
     private static async Task VerifyAsync()
@@ -85,6 +122,23 @@ internal static class NativeSmoke
             window.FindControl<ComboBox>("ThemeSelector")!.SelectedItem = preferences.Themes[0];
             Require(Application.Current!.RequestedThemeVariant == ThemeVariant.Default, "System theme must remain OS-controlled.");
             preferences.SelectedLanguage = preferences.Languages.Single(x => x.Id == "en");
+            window.Width = 920;
+            window.Height = 680;
+            window.Model.Navigate(ClientPage.Settings);
+            using (var editorModel = new RouteEditorViewModel(window.Model, true))
+            {
+                editorModel.Name = "VPN with local LAN";
+                editorModel.Rules = "192.168.0.0/16 direct";
+                var editor = new RouteProfileWindow { DataContext = editorModel };
+                editor.Show(window);
+                await Task.Delay(150);
+                SaveFrame(editor, "native-route-editor.png");
+                Require(await editorModel.SaveAsync(), "Routing profile could not be saved through fake IPC.");
+                Require(window.Model.Routing.CanEdit, "Custom routing profile was not selected.");
+                editor.Close();
+                await Task.Delay(150);
+                SaveFrame(window, "native-routing-profile.png");
+            }
             window.Model.Navigate(ClientPage.Connection);
             window.WindowState = WindowState.Maximized;
             await Task.Delay(100);
@@ -122,7 +176,7 @@ internal static class NativeSmoke
         }
     }
 
-    private static void SaveFrame(MainWindow window, string name)
+    private static void SaveFrame(Window window, string name)
     {
         using var bitmap = new RenderTargetBitmap(new PixelSize((int)window.Bounds.Width, (int)window.Bounds.Height));
         bitmap.Render(window);

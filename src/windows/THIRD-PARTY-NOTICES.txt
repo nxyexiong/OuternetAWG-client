@@ -9,8 +9,11 @@ Its device, conn and tun packages are compiled directly into the Go service.
 No kernel WireGuard driver or official Amnezia UI is used.
 
 WireGuard for Windows: https://git.zx2c4.com/wireguard-windows/
-The MIT-licensed winipcfg and firewall helper packages are used for IP Helper
-and Windows Filtering Platform integration, not its UI or tunnel engine.
+The MIT-licensed winipcfg package and a locally adapted v1.0.1 firewall helper
+are used for IP Helper and Windows Filtering Platform integration, not its UI
+or tunnel engine. The helper is retained in service\internal\firewall with its
+MIT license. OuternetAWG adds destination/interface routing-policy filters and
+restricts permitted VPN DNS traffic to the tunnel interface.
 
 Wintun: https://www.wintun.net/
 The unmodified, officially signed Wintun 0.14.1 DLL is redistributed under the

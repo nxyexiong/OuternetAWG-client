@@ -5,16 +5,18 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"errors"
+	"github.com/nxyexiong/OuternetAWG-client/windows/service/internal/routing"
 	"io"
 )
 
 const MaxFrame = 1024 * 1024
 
 type Request struct {
-	Version int    `json:"version"`
-	Command string `json:"command"`
-	Name    string `json:"name,omitempty"`
-	Config  string `json:"config,omitempty"`
+	Version int            `json:"version"`
+	Command string         `json:"command"`
+	Name    string         `json:"name,omitempty"`
+	Config  string         `json:"config,omitempty"`
+	Routing *routing.State `json:"routing,omitempty"`
 }
 
 type Response struct {

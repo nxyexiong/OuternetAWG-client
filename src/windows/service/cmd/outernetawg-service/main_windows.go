@@ -17,14 +17,21 @@ import (
 
 const serviceName = "OuternetAWG"
 
+// Set by build.ps1 from the Windows UI project's authoritative Version.
+var ClientVersion = "dev"
+
 type handler struct{ owner string }
+
+func buildIdentity() string {
+	return fmt.Sprintf("OuternetAWG Windows service %s; AmneziaWG v3.1.20260828; IPC v1", ClientVersion)
+}
 
 func main() {
 	owner := flag.String("owner-sid", "", "Windows SID allowed to control this service")
 	version := flag.Bool("version", false, "print build identity without loading Wintun or changing networking")
 	flag.Parse()
 	if *version {
-		fmt.Println("OuternetAWG Windows service; AmneziaWG v3.1.20260828; IPC v1")
+		fmt.Println(buildIdentity())
 		return
 	}
 	isService, err := svc.IsWindowsService()
@@ -96,7 +103,7 @@ func (h *handler) Execute(_ []string, requests <-chan svc.ChangeRequest, changes
 		}
 	}()
 	changes <- svc.Status{State: svc.Running, Accepts: svc.AcceptStop | svc.AcceptShutdown}
-	slog.Info("service ready; tunnel disconnected")
+	slog.Info("service ready; tunnel disconnected", "version", ClientVersion)
 	var serveErr error
 running:
 	for {

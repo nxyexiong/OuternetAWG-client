@@ -1,4 +1,5 @@
 using Avalonia;
+using System.Reflection;
 using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Headless.XUnit;
@@ -25,12 +26,23 @@ public static class TestApp
 public sealed class FakeService : IServiceClient
 {
     public TunnelStatus Status = new("disconnected", false, "Ready to connect.",
-        new ProfileSummary("Japan East", "node.example.com:51820", "10.110.0.2/32"), null);
+        new ProfileSummary("Japan East", "node.example.com:51820", "10.110.0.2/32"), null, RoutingState.Default());
     public Exception? Error;
     public Exception? StopError;
     public List<string> Commands = [];
     public Task<TunnelStatus>? PendingPoll;
     public Task? PendingStop;
+    public Action<RoutingState>? PersistRouting;
+
+    public Task<TunnelStatus> SaveRoutingAsync(RoutingState routing, CancellationToken cancellationToken = default)
+    {
+        Commands.Add("save-routing");
+        if (Error is not null) throw Error;
+        if (Status.Active) throw new ServiceException("Disconnect before changing routing profiles.");
+        PersistRouting?.Invoke(routing);
+        Status = Status with { Routing = routing };
+        return Task.FromResult(Status);
+    }
 
     public Task StartAsync(CancellationToken cancellationToken = default)
     {
@@ -70,6 +82,31 @@ public sealed class FakeService : IServiceClient
 
 public sealed class ClientTests
 {
+    [AvaloniaTheory]
+    [InlineData(920, 680)]
+    [InlineData(760, 580)]
+    public void AppVersionUsesBuildMetadataAndAppearsBelowBrand(double width, double height)
+    {
+        var window = new MainWindow(new FakeService(), TestApp.Preferences()) { Width = width, Height = height };
+        window.Show();
+        try
+        {
+            window.UpdateLayout();
+            var metadata = typeof(MainViewModel).Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>();
+            Assert.NotNull(metadata);
+            var version = window.FindControl<TextBlock>("AppVersionLabel")!;
+            Assert.Equal("v" + metadata.InformationalVersion.Split('+')[0], version.Text);
+            Assert.DoesNotContain("+", version.Text!);
+            var brand = window.FindControl<TextBlock>("BrandName")!;
+            var parent = window.FindControl<StackPanel>("SidebarBrand")!;
+            Assert.True(version.TranslatePoint(default, parent)!.Value.Y >=
+                brand.TranslatePoint(new Point(0, brand.Bounds.Height), parent)!.Value.Y);
+            Assert.Equal(brand.TranslatePoint(default, parent)!.Value.X, version.TranslatePoint(default, parent)!.Value.X);
+            AssertContained(version, parent);
+        }
+        finally { window.CloseForShutdown(); }
+    }
+
     [Fact]
     public async Task ShutdownDisconnectsBeforeStoppingAndWaitsForBoth()
     {

@@ -3,7 +3,7 @@ $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 $root = Split-Path -Parent $PSScriptRoot
 
-foreach ($path in @('package.ps1', 'build.ps1', 'install.ps1', 'uninstall.ps1')) {
+foreach ($path in @('package.ps1', 'build.ps1', 'version.ps1', 'install.ps1', 'uninstall.ps1')) {
     $tokens, $parseErrors = $null, $null
     $parsed = [Management.Automation.Language.Parser]::ParseFile(
         (Join-Path $root $path), [ref]$tokens, [ref]$parseErrors)

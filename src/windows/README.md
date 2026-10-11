@@ -36,16 +36,32 @@ The application's own binaries and scripts are not Authenticode-signed.
 
 ```powershell
 Set-Location C:\UserData\workspace\OuternetAWG-client\src\windows
-.\package.ps1 -Architecture x64 -Version 1.0.0
-.\package.ps1 -Architecture arm64 -Version 1.0.0
+.\package.ps1 -Architecture x64
+.\package.ps1 -Architecture arm64
 ```
 
 Each command builds the client and produces a single, complete offline installer:
-`dist\installers\OuternetAWG-1.0.0-windows-x64-setup.exe` (or `arm64`),
+`dist\installers\OuternetAWG-1.1.0-windows-x64-setup.exe` (or `arm64`),
 with a `.sha256` checksum and compiler log alongside it. Use `-SkipBuild` to
-repackage an existing, verified release; stale service-install scripts are rejected.
+repackage an existing, verified release; stale service-install scripts or mismatched
+UI/service versions are rejected.
 The target computer needs neither Go, a .NET SDK/runtime installation, PowerShell 7,
 nor an Internet connection. It uses the Windows PowerShell already supplied by Windows.
+
+The **single Windows client version source** is `<Version>` in
+`ui\OuternetAWG.UI.csproj`. Change it once for a new version. Both scripts evaluate
+that property through MSBuild; there is no separate installer `-Version` override.
+The UI label reads the resulting assembly informational version (without the Git
+metadata suffix). The Go service receives the same version through a linker value
+and exposes it with `--version`; its default `dev` value is not a release version.
+The installer name and Windows version information use that same project value.
+
+Builds verify the UI's executable/DLL product, file and assembly versions. A generated
+`service\build-info.json` binds the service's version to its architecture and SHA-256,
+since Go's `-trimpath` hides linker flags in embedded build metadata. Native builds
+also check the service's side-effect-free `--version` output. Packaging verifies all
+of this again, including with `-SkipBuild`, before invoking the installer compiler.
+The generated record is build output, not another editable version source.
 
 `package.ps1` downloads **Inno Setup 6.7.3** into `.cache`, verifies the pinned
 official SHA-256 and its **Pyrsys B.V.** Authenticode signature, and extracts it
@@ -119,7 +135,7 @@ the Quit action and can leave the independently running service active.
 
 The installer authorizes the Windows SID running it. If elevation uses a *different*
 administrator account, obtain your normal user's SID with `whoami /user` first and
-pass it to `.\OuternetAWG-1.0.0-windows-x64-setup.exe /USERSID=S-1-5-21-...`
+pass it to `.\OuternetAWG-1.1.0-windows-x64-setup.exe /USERSID=S-1-5-21-...`
 (or `.\install.ps1 -UserSid 'S-1-5-21-...'` for the raw release).
 Start the installer normally, rather than from an already elevated terminal, if
 you want its optional launch-at-finish action to run without elevation.
@@ -152,24 +168,80 @@ have the same keys and format placeholders as `en.json`. Theme brushes live in d
 `ui\Themes\Light.axaml` and `Dark.axaml` dictionaries, referenced with dynamic resources;
 Fluent controls follow the same active theme variant.
 
+## Routing profiles
+
+**Settings > Route** selects a routing profile independently of the imported AWG
+connection configuration. Two read-only profiles are always available:
+
+| Profile | Unmatched destinations | DNS |
+| --- | --- | --- |
+| **VPN** (initial default) | Through the VPN; off-tunnel access blocked | Imported VPN DNS |
+| **Direct** | Normal Windows networking; tunnel remains connected | Unchanged system DNS |
+
+**New** creates a custom profile using the selected profile's base/rules as a starting
+point. Enter a unique name, choose VPN or Direct as the base, and enter one IP/CIDR
+and action per line. **Save and select** persists and selects it. **Edit** and **Delete**
+are available only for custom profiles; deletion asks for confirmation and selects
+the built-in VPN profile. Disconnect before any routing changes.
+
+For internet VPN with local LAN access, use a VPN base and:
+
+```text
+192.168.0.0/16 direct
+```
+
+For NAS-style access without redirecting ordinary internet traffic, use a Direct
+base and:
+
+```text
+10.110.0.0/16 vpn
+```
+
+Direct alone adds no VPN destination routes: inbound VPN service access also needs
+a return route, hence the subnet rule in the NAS example. Host firewalls and service
+bindings still apply.
+
+Rules accept IPv4/IPv6 IPs or canonical network CIDRs and `vpn`/`direct` actions.
+The most-specific matching prefix wins, regardless of line order; unmatched traffic
+uses the base. Duplicate destinations, invalid network addresses and conflicting
+names are rejected. There are at most 32 custom profiles and 64 rules per profile.
+Custom names cannot be VPN or Direct.
+
+The service atomically persists custom profiles and the selected ID in
+`%ProgramData%\OuternetAWG\routing.json`, protected by the service directory ACL.
+It contains no VPN keys and is independent of `profile.dpapi` and per-user appearance
+preferences. Importing another AWG config does not reset routing. Corrupt settings
+or failed writes are reported, never silently replaced with defaults.
+
 ## Routing and privacy
 
-The client requires full-tunnel IPv4 AllowedIPs and installs **both**
-`0.0.0.0/1` and **`128.0.0.0/1`** on its Wintun adapter. The existing `/0` routes
-are not deleted or rewritten. The VPN server is resolved before connecting; its
-selected IP receives a host-route exception through the original uplink, and the
-engine's UDP socket is bound to that interface to avoid routing recursion.
+The imported AWG config still requires full-tunnel AllowedIPs; routing profiles select
+the destinations actually routed to the engine. A single policy compiler generates
+disjoint VPN destination prefixes and matching Windows Filtering Platform filters.
+Direct exceptions are omitted from VPN routes, including nested exceptions. A full
+VPN address family uses two `/1` routes rather than replacing the existing `/0`.
+More-specific existing routes for VPN-selected destinations are mirrored on Wintun
+at lower cost, not deleted or rewritten. Ambiguous zero-cost conflicts fail connection.
+Tunnel addresses are assigned as `/32` or `/128`, so an imported address mask cannot
+create an implicit subnet route outside the selected policy.
 
-DNS is set only on the tunnel adapter. A dynamic Windows Filtering Platform session
-permits the service transport, tunnel traffic, loopback and essential DHCP/NDP,
-while blocking off-tunnel application traffic and DNS to unconfigured resolvers.
-This also blocks direct LAN access that would otherwise win over the `/1` routes.
-More-specific routes belonging to other adapters are not removed.
+WFP enforces destination and interface together for outbound and inbound flows.
+VPN-selected application traffic cannot fall back outside the tunnel while the
+service's policy is active; Direct-selected traffic is allowed on normal interfaces.
+Loopback and essential DHCP/NDP retain their higher-priority exceptions. The VPN
+server is resolved before connecting, receives an endpoint host-route exception if
+needed, and the engine's UDP socket is bound to the original uplink.
 
-The deployed OuternetAWG nodes currently provide IPv4 only. An imported `::/0`
-without an IPv6 tunnel address **does not enable IPv6**; off-tunnel IPv6 is blocked
-by WFP instead of leaking. If a future config provides an IPv6 address and full
-IPv6 AllowedIPs, the client adds `::/1` and `8000::/1` as well.
+VPN-based profiles set DNS only on Wintun and restrict ordinary DNS to the imported
+resolvers over that interface. A rule excluding a VPN DNS resolver is rejected on
+connection rather than leaking or silently overriding the rule. Direct-based profiles
+leave system DNS unchanged. LAN IP access does not automatically enable local hostname
+resolution; split DNS and multicast discovery are not configured.
+
+The deployed nodes currently provide IPv4 only. VPN-selected IPv6 remains blocked
+when there is no IPv6 tunnel address, rather than falling back to Direct. An explicit
+IPv6 VPN rule requires an IPv6-enabled connection config; explicit IPv6 Direct rules
+are supported. Built-in Direct leaves ordinary IPv6 networking alone.
 
 Disconnect closes the engine and its owned Wintun adapter. Wintun's adapter removal
 also removes the interface's addresses, DNS and routes; the client does not separately
@@ -184,8 +256,8 @@ and choose the new uplink; automatic network roaming is not implemented.
 
 ## Process boundary
 
-The service runs as LocalSystem and accepts only `status`, `import`, `connect`
-and `disconnect` over `\\.\pipe\OuternetAWG.Control.v1`. Its ACL admits only the
+The service runs as LocalSystem and accepts only `status`, `import`, `connect`,
+`disconnect` and `save-routing` over `\\.\pipe\OuternetAWG.Control.v1`. Its ACL admits only the
 installing user SID, SYSTEM and Administrators; remote pipe clients are rejected.
 The UI verifies the pipe server PID against the Service Control Manager before
 sending config contents and does not grant impersonation privileges.
@@ -205,7 +277,8 @@ IPC is a little-endian 32-bit length followed by UTF-8 JSON, capped at 1 MiB.
 Requests carry `version: 1`; config text is capped at 128 KiB. No caller-provided
 paths, executables, shell commands or wg-quick scripts are executed. One
 `[Interface]` and one `[Peer]` are supported. Unknown/duplicate settings and partial
-IPv4 routes are rejected rather than silently ignored.
+IPv4 AllowedIPs in the imported connection config are rejected rather than silently
+ignored; routing-profile rules use the separate validated `save-routing` command.
 MTU is limited to 1280-1420, packet padding to 256 bytes and junk packets to 1280
 bytes. I1-I5 templates accept bounded `b`, `r`, `rc`, `rd` and `t` tags only.
 
@@ -232,12 +305,24 @@ Set-Location ..\windows\service
 Set-Location ..
 dotnet test .\tests\OuternetAWG.UI.Tests.csproj
 .\installer\test-packaging.ps1
+.\installer\test-versioning.ps1
 # Optional: briefly show a real native window/tray, using only a fake service:
 dotnet run --project .\tests\OuternetAWG.UI.Tests.csproj -- --native-smoke
+# Interactive UI review with a fake service; no real service or network changes:
+dotnet run --project .\tests\OuternetAWG.UI.Tests.csproj -- --preview
 # After packaging, inspect the actual EXE resources without running either executable:
 .\tools\test-icons.ps1 -ApplicationExe .\dist\win-x64\ui\OuternetAWG.exe `
-    -InstallerExe .\dist\installers\OuternetAWG-1.0.0-windows-x64-setup.exe
+    -InstallerExe .\dist\installers\OuternetAWG-1.1.0-windows-x64-setup.exe
 ```
+
+The preview opens Settings and stores its synthetic routing profiles only in
+`tests\bin\Debug\net8.0\preview-routing.json`. Use the tray's Quit command to close it.
+It cannot connect a real VPN or edit production routing settings. Tests cover profile
+persistence, immutable built-ins, IPC/controller validation, route partitioning,
+native WFP filter structure/precedence through an injected recorder, and localized UI
+flows. Live Windows packet-path behavior must additionally be exercised on an
+isolated Windows test machine before release; these checks intentionally do not
+install filters or routes on the development workstation.
 
 Headless UI tests render the connection page at normal/minimum sizes, including
 an error banner, to the ignored test output directory. They assert that controls
